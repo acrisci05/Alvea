@@ -34,3 +34,11 @@ web-build/
 .DS_Store
 .vscode/
 .idea/
+.claude/
+
+# LaTeX (file ausiliari di compilazione; teniamo .tex e .pdf)
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz

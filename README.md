@@ -103,6 +103,7 @@ Imposta `API_URL` in `mobile/src/config.js` con l'IP del PC. Dettagli in
 
 ## Documentazione (Fase 2 / Fase 3)
 
+- 📄 **[Relazione tecnica completa (PDF)](docs/RELAZIONE.pdf)** — sorgente LaTeX: [`docs/RELAZIONE.tex`](docs/RELAZIONE.tex)
 - [Analisi dei requisiti (RQ-XX)](docs/01-analisi-requisiti.md)
 - [Casi d'uso](docs/02-use-case.md)
 - [Schema E-R](docs/03-er-schema.md)
