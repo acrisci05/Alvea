@@ -1,0 +1,92 @@
+# PulseGuard-Baby - stack completo
+# ESP32 --MQTT--> Mosquitto --> Node-RED --> InfluxDB --> Grafana
+#                          \--> Backend FastAPI --> SQLite + WebSocket/SSE --> App
+services:
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: pulseguard_mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"   # MQTT
+      - "9001:9001"   # MQTT over WebSocket
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+
+  influxdb:
+    image: influxdb:2.7
+    container_name: pulseguard_influxdb
+    restart: unless-stopped
+    ports:
+      - "8086:8086"
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUX_USERNAME:-admin}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUX_PASSWORD:-pulseguard123}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUX_ORG:-pulseguard}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUX_BUCKET:-vitals}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUX_ADMIN_TOKEN:-pulseguard-admin-token}
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+
+  nodered:
+    image: nodered/node-red:latest
+    container_name: pulseguard_nodered
+    restart: unless-stopped
+    ports:
+      - "1880:1880"
+    environment:
+      INFLUX_URL: http://influxdb:8086
+      INFLUX_ORG: ${INFLUX_ORG:-pulseguard}
+      INFLUX_BUCKET: ${INFLUX_BUCKET:-vitals}
+      INFLUX_TOKEN: ${INFLUX_ADMIN_TOKEN:-pulseguard-admin-token}
+    volumes:
+      - ./nodered/data:/data
+    depends_on:
+      - mosquitto
+      - influxdb
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: pulseguard_grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      # passiamo il token Influx alla datasource provisionata
+      INFLUX_TOKEN: ${INFLUX_ADMIN_TOKEN:-pulseguard-admin-token}
+      INFLUX_ORG: ${INFLUX_ORG:-pulseguard}
+      INFLUX_BUCKET: ${INFLUX_BUCKET:-vitals}
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - influxdb
+
+  backend:
+    build: ../backend
+    container_name: pulseguard_backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      MQTT_HOST: mosquitto
+      MQTT_PORT: 1883
+      TOPIC_DATA: pulseguard/baby/data
+      SECRET_KEY: ${SECRET_KEY:-dev_secret}
+      # InfluxDB dal backend e' OPZIONALE (Node-RED e' il percorso canonico)
+      INFLUX_ENABLED: "false"
+      INFLUX_URL: http://influxdb:8086
+      INFLUX_ORG: ${INFLUX_ORG:-pulseguard}
+      INFLUX_BUCKET: ${INFLUX_BUCKET:-vitals}
+      INFLUX_TOKEN: ${INFLUX_ADMIN_TOKEN:-pulseguard-admin-token}
+    depends_on:
+      - mosquitto
+
+volumes:
+  influxdb_data:
+  grafana_data:
