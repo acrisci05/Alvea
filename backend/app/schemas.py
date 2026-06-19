@@ -1,7 +1,7 @@
 # schemas.py - Schemi Pydantic (v2) di richiesta/risposta.
 from datetime import datetime
 from typing import Optional, Literal
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 
 # --- Auth ---
@@ -83,6 +83,15 @@ class ThresholdConfig(BaseModel):
     temp_warn_high: float
     temp_crit_low: float
     temp_crit_high: float
+
+    @model_validator(mode="after")
+    def _check_order(self):
+        # Le soglie devono essere coerenti: crit_low < warn_low < warn_high < crit_high.
+        if not (self.bpm_crit_low < self.bpm_warn_low < self.bpm_warn_high < self.bpm_crit_high):
+            raise ValueError("Soglie BPM incoerenti: atteso crit_low < warn_low < warn_high < crit_high")
+        if not (self.temp_crit_low < self.temp_warn_low < self.temp_warn_high < self.temp_crit_high):
+            raise ValueError("Soglie temperatura incoerenti: atteso crit_low < warn_low < warn_high < crit_high")
+        return self
 
 class ThresholdResponse(ThresholdConfig):
     device_id: str
