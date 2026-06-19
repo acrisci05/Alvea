@@ -1,34 +1,48 @@
-# main_sim_mqtt.py - Telemetria SIMULATA pubblicata via MQTT (stack Docker).
-# Carica questo come main.py per il percorso "simulazione + MQTT".
+# main_sim_mqtt.py - Telemetria SIMULATA via MQTT (Logica asincrona di produzione).
+
 import time
 import machine
-
 import config
-import wifi
-from sensor_sim import SimSensor
+from wifi import WiFiManager
 from transport_mqtt import MQTTPublisher
+from sensor_sim import SimSensor
 
 try:
     import secrets
     SSID, PSW = secrets.WIFI_SSID, secrets.WIFI_PASS
 except ImportError:
-    raise RuntimeError("Crea secrets.py da secrets_example.py")
+    raise RuntimeError("File secrets.py mancante.")
 
-print("== PulseGuard-Baby :: SIM + MQTT ==")
-if not wifi.connetti_wifi(SSID, PSW):
-    machine.reset()
+print("== AsthmaGuard TEST-RIG :: SIMULATORE MQTT ASINCRONO ==")
 
+wifi_mga = WiFiManager(SSID, PSW)
 mqtt = MQTTPublisher()
-mqtt.reconnect_forever()
-
 sensor = SimSensor()
-print("Monitoraggio attivo (1 Hz)...")
+
+last_pub = time.time()
+
 while True:
-    try:
+    # Gestione della rete in background senza bloccare il loop
+    wifi_mga.rinfresca_connessione()
+    if wifi_mga.is_connected():
+        mqtt.check_connection()
+    else:
+        mqtt.is_connected = False
+
+    # Invio temporizzato ad 1 Hz
+    if time.time() - last_pub >= config.PUBLISH_PERIOD_S:
+        last_pub = time.time()
+        
         reading = sensor.read()
-        mqtt.publish(reading)
-        print("TX:", reading)
-        time.sleep(config.PUBLISH_PERIOD_S)
-    except Exception as e:
-        print("Loop error:", e)
-        mqtt.reconnect_forever()
+        
+        # Inietta lo stato di rete nel pacchetto diagnostico
+        if not mqtt.is_connected:
+            reading["device_status"] = "WARN_NETWORK_DISCONNECTED"
+            print("[SIM LOCAL]:", reading)
+        else:
+            reading["device_status"] = "SYSTEM_OK"
+            mqtt.publish(reading)
+            print("[SIM TX]:", reading)
+            
+    # Un piccolissimo sleep per allentare la CPU quando simula (risparmio energetico)
+    time.sleep_ms(10)

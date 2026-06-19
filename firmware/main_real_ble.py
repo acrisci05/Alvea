@@ -1,44 +1,84 @@
-# main_real_ble.py - Telemetria REALE (AD8232 + temperatura) via BLE NOTIFY.
-# Carica questo come main.py per il percorso "sensore reale + BLE".
-import time
+# main_real_ble.py - Firmware di Produzione BLE ad Alta Affidabilita'.
 
+import time
+import machine
 import config
+from transport_ble import BLEPeripheral
 from sensor_ecg import ECGMonitor, SAMPLE_PERIOD_US
 from sensor_temp import TempSensor
-from transport_ble import BLEPeripheral
+from sensor_ppg import PPGMonitor
 
-print("== PulseGuard-Baby :: REALE (AD8232) + BLE ==")
+print("=== ASTHMAGUARD PRO: AVVIO ARCHITETTURA BLE ===")
+
+# Inizializzazione BLE
 ble = BLEPeripheral()
+
+# Inizializzazione Sensori Reali
 ecg = ECGMonitor()
 thermo = TempSensor()
+ppg = PPGMonitor()
 
+# Variabili di Timing
 next_sample = time.ticks_us()
 last_pub = time.time()
-print("In attesa di connessione dall'app...")
+ppg_sample_divider = 0
+
+print("Attesa connessione App Mobile...")
 
 while True:
+    # 1. TIMING DETERMINISTICO (250 Hz)
     while time.ticks_diff(time.ticks_us(), next_sample) < 0:
         pass
     next_sample = time.ticks_add(next_sample, SAMPLE_PERIOD_US)
 
-    if ecg.leads_off():
-        ecg.reset()
-    else:
+    # 2. ELABORAZIONE MEDICA (ECG a 250Hz, PPG a 50Hz)
+    contact_ecg = not ecg.leads_off()
+    if contact_ecg:
         ecg.feed(ecg.read_raw())
+    else:
+        ecg.reset()
 
+    ppg_sample_divider += 1
+    if ppg_sample_divider >= 5:
+        ppg_sample_divider = 0
+        red_raw, ir_raw = ppg.read_raw()
+        ppg.feed(red_raw, ir_raw)
+
+    # 3. TRASMISSIONE TELEMETRIA CRONOMETRATA (1 Hz)
     if time.time() - last_pub >= config.PUBLISH_PERIOD_S:
-        contact = not ecg.leads_off()
-        bpm = ecg.compute_bpm() if contact else 0
-        temp = thermo.read() if contact else 0.0
+        last_pub = time.time()
+        
+        contact_ppg = ppg.is_skin_on()
+        temp_val = thermo.read()
+        
+        # Diagnostica Hardware
+        if not contact_ecg:
+            status_string = "ERR_ECG_LEADS_OFF"
+        elif not contact_ppg:
+            status_string = "ERR_PPG_NO_CONTACT"
+        elif temp_val is None:
+            status_string = "ERR_TEMP_SENSOR_FAULT"
+        elif not ble.is_connected():
+            status_string = "WARN_BLE_DISCONNECTED"
+        else:
+            status_string = "SYSTEM_OK"
+
+        bpm = ecg.compute_bpm() if contact_ecg else 0
+        spo2, resp_rate = ppg.compute_metrics() if contact_ppg else (0.0, 0.0)
+        final_temp = temp_val if temp_val is not None else 0.0
+
         reading = {
             "device_id": config.DEVICE_ID,
             "timestamp": time.time(),
             "bpm": float(bpm),
-            "temperature": float(temp),
-            "sensor_contact": contact,
-            "source": "ad8232",
+            "skin_temperature": float(final_temp),
+            "spo2": float(spo2),
+            "respiration_rate": float(resp_rate),
+            "sensor_contact": (contact_ecg and contact_ppg),
+            "device_status": status_string,
+            "source": "production_ble"
         }
+        
         if ble.is_connected():
             ble.send_json(reading)
-            print("NOTIFY:", reading)
-        last_pub = time.time()
+            print("[BLE TX]:", reading)

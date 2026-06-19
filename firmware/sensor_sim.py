@@ -1,41 +1,44 @@
-# sensor_sim.py - Sorgente dati SIMULATA per PulseGuard-Baby.
-#
-# Genera una lettura fisiologica plausibile attorno allo stato nominale,
-# replicando la logica del main.py originale del progetto. Espone la stessa
-# interfaccia di sensor_real.py (metodo .read() -> dict) cosi' che il resto
-# del firmware non sappia, ne' debba sapere, quale sorgente e' attiva.
+# sensor_sim.py - Sorgente dati SIMULATA (HIL Testing per produzione).
+# Ottimizzato: zero allocazioni dinamiche nel loop principale.
+
 import time
 import random
-
 import config
 
-
 class SimSensor:
-    """Sensore simulato. .read() restituisce un dizionario con lo schema
-    canonico della telemetria PulseGuard-Baby."""
-
     def __init__(self):
         self._contact = True
+        
+        # PRODUZIONE: Pre-allocazione della struttura dati
+        self._payload = {
+            "device_id": config.DEVICE_ID,
+            "timestamp": 0,
+            "bpm": 0.0,
+            "skin_temperature": 0.0,
+            "spo2": 0.0,
+            "respiration_rate": 0.0,
+            "sensor_contact": True,
+            "source": "sim_test_rig"
+        }
 
     def read(self):
-        # Aderenza fascia: 95% a contatto, 5% si stacca (allarme tecnico)
+        """Aggiorna i valori del dizionario pre-esistente senza riallocare memoria."""
         self._contact = random.random() > config.CONTACT_DROP_PROB
 
-        if self._contact:
-            bpm = round(random.uniform(config.BPM_SIM_MIN, config.BPM_SIM_MAX), 1)
-            temperature = round(random.uniform(config.TEMP_SIM_MIN, config.TEMP_SIM_MAX), 1)
-        else:
-            # Fascia staccata: i valori crollano. Node-RED/Backend distinguono
-            # questo "falso allarme" guardando sensor_contact, non i valori.
-            bpm = 0.0
-            temperature = 0.0
-            print("[WARNING] Fascia non a contatto! Avviso tecnico.")
+        self._payload["timestamp"] = time.time()
+        self._payload["sensor_contact"] = self._contact
 
-        return {
-            "device_id": config.DEVICE_ID,
-            "timestamp": time.time(),
-            "bpm": bpm,
-            "temperature": temperature,
-            "sensor_contact": self._contact,
-            "source": "sim",
-        }
+        if self._contact:
+            self._payload["bpm"] = round(random.uniform(config.BPM_SIM_MIN, config.BPM_SIM_MAX), 1)
+            self._payload["skin_temperature"] = round(random.uniform(config.TEMP_SKIN_SIM_MIN, config.TEMP_SKIN_SIM_MAX), 1)
+            self._payload["spo2"] = round(random.uniform(config.SPO2_SIM_MIN, config.SPO2_SIM_MAX), 1)
+            self._payload["respiration_rate"] = round(random.uniform(config.RESP_RATE_SIM_MIN, config.RESP_RATE_SIM_MAX), 1)
+        else:
+            self._payload["bpm"] = 0.0
+            self._payload["skin_temperature"] = 0.0
+            self._payload["spo2"] = 0.0
+            self._payload["respiration_rate"] = 0.0
+            print("[SIM WARNING] Caduta di contatto simulata!")
+
+        # Restituisce un riferimento al dizionario in memoria
+        return self._payload

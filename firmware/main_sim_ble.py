@@ -1,19 +1,28 @@
-# main_sim_ble.py - Telemetria SIMULATA inviata via BLE NOTIFY all'app mobile.
-# Carica questo come main.py per il percorso "simulazione + BLE".
-import time
+# main_sim_ble.py - Telemetria SIMULATA inviata via BLE NOTIFY.
 
+import time
 import config
 from sensor_sim import SimSensor
 from transport_ble import BLEPeripheral
 
-print("== PulseGuard-Baby :: SIM + BLE ==")
+print("== AsthmaGuard TEST-RIG :: SIMULATORE BLE ASINCRONO ==")
 ble = BLEPeripheral()
 sensor = SimSensor()
 
-print("In attesa di connessione dall'app...")
+last_pub = time.time()
+
 while True:
-    if ble.is_connected():
+    if time.time() - last_pub >= config.PUBLISH_PERIOD_S:
+        last_pub = time.time()
+        
         reading = sensor.read()
-        if ble.send_json(reading):
-            print("NOTIFY:", reading)
-    time.sleep(config.PUBLISH_PERIOD_S)
+        
+        if ble.is_connected():
+            reading["device_status"] = "SYSTEM_OK"
+            if ble.send_json(reading):
+                print("[SIM BLE NOTIFY]:", reading)
+        else:
+            reading["device_status"] = "WARN_BLE_DISCONNECTED"
+            print("[SIM BLE STANDBY]:", reading)
+            
+    time.sleep_ms(10)
