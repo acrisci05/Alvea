@@ -10,7 +10,7 @@ Progetto per *Academy Medical Wearable Devices*.
 
 # Cosa fa
 
-L'ESP32 acquisisce i parametri (sensori reali PPG **MAX30102**, ECG **AD8232**, Temp **DS18B20** *oppure* un simulatore HIL) e li invia **a 1 Hz**. Il sistema è bidirezionale: l'hardware ascolta 
+L'ESP32 acquisisce i parametri (sensori reali PPG **analogico**, ECG **AD8232**, termistore **NTC di precisione**) e li invia **a 1 Hz**. Il sistema è bidirezionale: l'hardware ascolta 
 il backend per ricevere configurazioni remote (es. frequenza di campionamento). Due percorsi 
 paralleli condividono **lo stesso payload JSON**, così passare da simulatore a sensore reale non 
 cambia nulla a valle:
