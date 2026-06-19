@@ -99,9 +99,9 @@ L'architettura adotta una forte \textbf{separazione delle responsabilità}. Il d
 
 \subsection{Sensori e interfacce logiche}
 \begin{enumerate}[leftmargin=1.5em,itemsep=3pt]
-  \item \textbf{PPG per SpO2 e Respiro (MAX30102).} Sensore ottico connesso sul bus \textbf{I2C (GPIO21/22)}. La SpO2 è calcolata tramite il rapporto AC/DC delle lunghezze d'onda Rosso/Infrarosso (Ratio of Ratios). La Frequenza Respiratoria è estratta purificando il segnale IR tramite un \textbf{Filtro IIR Passa-Basso} ($\alpha = 0.05$) che sopprime la frequenza cardiaca ed evidenzia l'onda respiratoria, analizzata poi su una finestra circolare di 10 secondi.
+  \item \textbf{PPG per SpO2 e Respiro (PPG analogico).} Sensore ottico connesso sul bus \textbf{I2C (GPIO21/22)}. La SpO2 è calcolata tramite il rapporto AC/DC delle lunghezze d'onda Rosso/Infrarosso (Ratio of Ratios). La Frequenza Respiratoria è estratta purificando il segnale IR tramite un \textbf{Filtro IIR Passa-Basso} ($\alpha = 0.05$) che sopprime la frequenza cardiaca ed evidenzia l'onda respiratoria, analizzata poi su una finestra circolare di 10 secondi.
   \item \textbf{Frequenza Cardiaca (AD8232).} Front-end analogico ECG campionato a \textbf{250 Hz (GPIO34)}. Il BPM è ricavato mediante un algoritmo Pan-Tompkins ottimizzato con \textbf{Ring Buffer statici} per evitare allocazioni dinamiche (zero Garbage Collector) e garantire stabilità in produzione.
-  \item \textbf{Temperatura cutanea (DS18B20).} Sensore digitale \textbf{1-Wire (GPIO4)} per la rilevazione della temperatura periferica, fisiologicamente più bassa rispetto a quella interna.
+  \item \textbf{Temperatura cutanea (Termistore NTC).} Sensore digitale \textbf{1-Wire (GPIO4)} per la rilevazione della temperatura periferica, fisiologicamente più bassa rispetto a quella interna.
 \end{enumerate}
 
 \begin{table}[h]
@@ -112,10 +112,10 @@ L'architettura adotta una forte \textbf{separazione delle responsabilità}. Il d
 \toprule
 \textbf{Componente} & \textbf{Interfaccia fisica} & \textbf{Tipo di segnale / dati} \\
 \midrule
-Sensore Ottico MAX30102 & I2C -- GPIO21 (SDA), GPIO22 (SCL)  & Digitale (Raw Red/IR) \\
+Sensore Ottico PPG analogico -- GPIO21 (SDA), GPIO22 (SCL)  & Digitale (Raw Red/IR) \\
 Front-end ECG AD8232 & ADC1 -- GPIO34 (12 bit)        & Tensione analogica (onda ECG) \\
 Leads-off AD8232     & GPIO32 (LO+), GPIO33 (LO--)    & Digitale (rilevamento aderenza) \\
-Sensore DS18B20      & 1-Wire -- GPIO4                & Temperatura cutanea \\
+Termistore NTC di precisione      & 1-Wire -- GPIO4                & Temperatura cutanea \\
 \bottomrule
 \end{tabularx}
 \end{table}
