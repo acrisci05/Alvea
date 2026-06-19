@@ -4,37 +4,57 @@ Modello dati persistente del backend (vedi `backend/app/models.py`).
 
 ```mermaid
 erDiagram
-    CAREGIVER ||--o{ DEVICE : possiede
-    DEVICE   ||--o{ READING : genera
-    DEVICE   ||--o{ ALERT   : produce
+    USER ||--o{ PATIENT : "supervisiona (se Medico) / assiste (se Caregiver)"
+    PATIENT ||--o| MEDICAL_RECORD : "possiede (Anamnesi)"
+    PATIENT ||--o| DEVICE : "indossa"
+    DEVICE  ||--o{ READING : "genera"
+    DEVICE  ||--o{ ALERT   : "produce"
 
-    CAREGIVER {
+    USER {
         int    id PK
         string username "univoco"
         string hashed_password "bcrypt"
+        string role "medico | paziente"
+    }
+    PATIENT {
+        int    id PK
+        string full_name
+        int    caregiver_id FK "-> USER.id (opzionale)"
+        int    doctor_id FK "-> USER.id"
+    }
+    MEDICAL_RECORD {
+        int    id PK
+        int    patient_id FK "-> PATIENT.id"
+        string pathologies "es. Asma allergico"
+        string medications "es. Salbutamolo"
+        string allergies
+        string clinical_notes
     }
     DEVICE {
         int    id PK
-        string device_id "univoco, es. PULSEGUARD_BABY_04"
-        string baby_name
-        int    owner_id FK "-> CAREGIVER.id"
+        string device_id "univoco, es. ALVEA_ASTHMA_ANKLE_01"
+        int    patient_id FK "-> PATIENT.id"
+        int    publish_period_s "frequenza invio (Configurabile)"
     }
     READING {
         int      id PK
         string   device_id FK "-> DEVICE.device_id"
         datetime ts
         float    bpm
-        float    temperature
+        float    skin_temperature
+        float    spo2
+        float    respiration_rate
         bool     sensor_contact
-        string   source "sim | ad8232"
+        string   device_status "es. SYSTEM_OK, ERR_PPG_NO_CONTACT"
+        string   source "sim-pc-script | production_firmware"
     }
     ALERT {
         int      id PK
         string   device_id FK "-> DEVICE.device_id"
         datetime ts
-        string   kind "bpm_high | temp_low | contact_lost | ..."
+        string   parameter "spo2 | resp_rate | bpm | temp | hardware"
         string   severity "warning | critical | technical"
-        string   message
+        string   description "es. Ipossia rilevata (SpO2 < 92%)"
         float    value
     }
 ```
