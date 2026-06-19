@@ -1,54 +1,62 @@
 # Fase 3 — Diagramma dei Casi d'Uso
 
-Attori: **Caregiver** (genitore/operatore), **Dispositivo ESP32** (attore
-secondario che immette telemetria), **Sistema di Allarme** (tempo).
+[cite_start]Attori: **Paziente / Caregiver** (attore primario), **Medico** (attore primario con permessi estesi) [cite: 39, 41][cite_start], e **Dispositivo ESP32** (attore secondario che immette telemetria e riceve configurazioni)[cite: 106].
 
 ```mermaid
 flowchart LR
     subgraph attori_primari[" "]
-        CG((Caregiver))
+        PAZ((Paziente / Caregiver))
+        MED((Medico))
     end
-    subgraph Sistema["Sistema PulseGuard-Baby"]
-        UC1(["Registrarsi / Accedere"])
-        UC2(["Associare un dispositivo"])
-        UC3(["Visualizzare battito e temperatura in tempo reale"])
-        UC4(["Consultare lo storico"])
-        UC5(["Ricevere allarmi"])
-        UC6(["Inviare telemetria 1 Hz"])
-        UC7(["Valutare soglie e generare allarmi"])
-        UC8(["Rilevare fascia staccata"])
+    
+    subgraph Sistema["Sistema Alvea (Asma Pediatrico)"]
+        UC1(["Autenticazione (RBAC)"])
+        UC2(["Visualizzare parametri asma in tempo reale"])
+        UC3(["Ricevere e visualizzare alert"])
+        UC4(["Consultare storico e statistiche"])
+        UC5(["Configurare parametri e soglie device"])
+        UC6(["Gestire scheda anamnestica"])
+        UC7(["Inviare telemetria clinica"])
+        UC8(["Ricevere comandi di configurazione"])
+        UC9(["Valutare soglie e generare alert"])
     end
+    
     subgraph attori_secondari[" "]
         ESP((Dispositivo ESP32))
     end
 
-    CG --> UC1
-    CG --> UC2
-    CG --> UC3
-    CG --> UC4
-    CG --> UC5
+    PAZ --> UC1
+    PAZ --> UC2
+    PAZ --> UC3
+    PAZ --> UC4
 
-    ESP --> UC6
-    UC6 -. include .-> UC7
-    UC7 -. extend .-> UC5
-    UC8 -. extend .-> UC7
+    MED --> UC1
+    MED --> UC3
+    MED --> UC4
+    MED --> UC5
+    MED --> UC6
+
+    ESP --> UC7
     ESP --> UC8
+
+    UC7 -. include .-> UC9
+    UC9 -. extend .-> UC3
+    UC5 -. include .-> UC8
 ```
 
 ## Specifica del caso d'uso principale — *Visualizzare in tempo reale* (UC3)
 
 - **Attore primario:** Caregiver
-- **Precondizioni:** caregiver autenticato (RQ-12); dispositivo associato (RQ-14).
+- **Precondizioni:** L'utente è autenticato con il ruolo corretto (RQ-12) ; il dispositivo ESP32 è associato al paziente (RQ-14).
 - **Flusso base:**
-  1. Il caregiver apre la schermata Monitor dell'app.
-  2. L'app apre il canale WebSocket verso il backend (`/ws/live`).
-  3. L'ESP32 pubblica una lettura su MQTT (RQ-04).
-  4. Il backend la valida, la salva e la inoltra via WebSocket (RQ-10, RQ-13).
-  5. L'app aggiorna BPM, temperatura e stato fascia.
+1. Il paziente apre la schermata Monitor dell'app mobile.
+2. L'app apre il canale WebSocket/SSE verso il backend API.
+3. L'ESP32 pubblica una lettura MQTT completa (SpO2, frequenza respiratoria, BPM, Temp).
+4. Il backend la riceve, la storicizza su InfluxDB e la inoltra istantaneamente via WebSocket.
+5. L'app aggiorna l'interfaccia grafica con i nuovi valori fisiologici.
 - **Flusso alternativo A (fascia staccata):** se `sensor_contact == false`, il
   sistema mostra l'avviso tecnico e sospende la valutazione fisiologica (RQ-08).
 - **Postcondizioni:** la lettura è persistita e visibile anche su Grafana (RQ-11).
 
 > Mermaid non ha la notazione UML "a palloncino" nativa: questa è
-> un'approssimazione fedele. Per la consegna formale puoi rigenerarla identica
-> in PlantUML/draw.io mantenendo attori, include ed extend qui descritti.
+> un'approssimazione fedele.
