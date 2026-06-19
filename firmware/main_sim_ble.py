@@ -12,7 +12,7 @@ sensor = SimSensor()
 last_pub = time.time()
 
 while True:
-    if time.time() - last_pub >= config.PUBLISH_PERIOD_S:
+    if time.time() - last_pub >= config.DEFAULT_PUBLISH_PERIOD_S:
         last_pub = time.time()
         
         reading = sensor.read()

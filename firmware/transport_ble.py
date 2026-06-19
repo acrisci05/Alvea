@@ -1,4 +1,5 @@
-# transport_ble.py - Periferica BLE che invia la telemetria via NOTIFY.
+# transport_ble.py - Periferica BLE che invia la telemetria via NOTIFY e
+# riceve comandi/configurazioni via WRITE (Punto 8 dei requisiti).
 #
 # Basato su ble_notify_es2.py (versione incapsulata, non bloccante): la logica
 # pesante NON va mai dentro l'IRQ, altrimenti il central si disconnette.
@@ -10,15 +11,19 @@ import config
 
 _IRQ_CENTRAL_CONNECT = const(1)
 _IRQ_CENTRAL_DISCONNECT = const(2)
+_IRQ_GATTS_WRITE = const(3)
 
 
 class BLEPeripheral:
-    def __init__(self, name=None):
+    def __init__(self, name=None, command_callback=None):
         self.name = name or config.BLE_NAME
         self.conn_handle = None
+        # Funzione chiamata con il payload (bytes) scritto dall'app/medico
+        self.command_callback = command_callback
 
         self.SERVICE_UUID = bluetooth.UUID(config.BLE_SERVICE_UUID)
         self.CHAR_UUID = bluetooth.UUID(config.BLE_CHAR_UUID)
+        self.CHAR_CMD_UUID = bluetooth.UUID(config.BLE_CHAR_CMD_UUID)
 
         self.ble = bluetooth.BLE()
         self.ble.active(True)
@@ -27,9 +32,10 @@ class BLEPeripheral:
         self._start_advertising()
 
     def _register_services(self):
-        char = (self.CHAR_UUID, bluetooth.FLAG_NOTIFY)
-        service = (self.SERVICE_UUID, (char,))
-        ((self.char_handle,),) = self.ble.gatts_register_services((service,))
+        char_tx = (self.CHAR_UUID, bluetooth.FLAG_NOTIFY)
+        char_cmd = (self.CHAR_CMD_UUID, bluetooth.FLAG_WRITE)
+        service = (self.SERVICE_UUID, (char_tx, char_cmd))
+        ((self.char_handle, self.cmd_handle),) = self.ble.gatts_register_services((service,))
 
     def _irq_handler(self, event, data):
         if event == _IRQ_CENTRAL_CONNECT:
@@ -39,6 +45,13 @@ class BLEPeripheral:
             print("BLE: central disconnesso")
             self.conn_handle = None
             self._start_advertising()   # torna visibile
+        elif event == _IRQ_GATTS_WRITE:
+            conn_handle, attr_handle = data
+            if attr_handle == self.cmd_handle and self.command_callback:
+                payload = self.ble.gatts_read(self.cmd_handle)
+                # La callback viene eseguita fuori dal contesto critico IRQ:
+                # deve restare leggera (solo parsing JSON + aggiornamento variabili).
+                self.command_callback(payload)
 
     def _adv_payload(self):
         p = bytearray()

@@ -10,7 +10,7 @@ class WiFiManager:
         self.wlan = network.WLAN(network.STA_IF)
         self.wlan.active(True)
 
-    def Is_connected(self):
+    def is_connected(self):
         return self.wlan.isconnected()
 
     def rinfresca_connessione(self):
