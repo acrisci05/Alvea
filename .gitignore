@@ -1,4 +1,4 @@
-# Segreti / credenziali (MAI nel repo)
+# Segreti / credenziali (mai visibili nel repository)
 firmware/secrets.py
 docker-stack/.env
 **/secrets.py
