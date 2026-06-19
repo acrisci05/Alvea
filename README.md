@@ -1,4 +1,4 @@
-# PulseGuard-Baby 👶❤️
+# Alvea 👶❤️
 
 Fascia indossabile **didattica** per il monitoraggio del **battito cardiaco** e
 della **temperatura** di un neonato, con rilevamento dell'aderenza della fascia.
@@ -16,7 +16,7 @@ valle:
 
 ```mermaid
 flowchart LR
-    FW[ESP32<br/>sim o AD8232] -- "MQTT pulseguard/baby/data" --> MQ[(Mosquitto)]
+    FW[ESP32<br/>sim o AD8232] -- "MQTT alvea/data" --> MQ[(Mosquitto)]
     FW -. "BLE (alternativo)" .-> APP[App mobile]
     MQ --> NR[Node-RED] --> IDB[(InfluxDB)] --> GF[Grafana]
     MQ --> BE[Backend FastAPI] --> SQL[(SQLite)]
@@ -25,14 +25,14 @@ flowchart LR
 
 Payload canonico:
 ```json
-{ "device_id": "PULSEGUARD_BABY_04", "timestamp": 1733740000.0,
+{ "device_id": "ALVEA_04", "timestamp": 1733740000.0,
   "bpm": 121.0, "temperature": 36.6, "sensor_contact": true, "source": "sim" }
 ```
 
 ## Struttura del repository
 
 ```
-PulseGuard-Baby/
+Alvea/
 ├── firmware/        # MicroPython ESP32: sim + AD8232 reale, MQTT + BLE
 ├── backend/         # FastAPI: auth JWT, CRUD, ingest MQTT, WebSocket/SSE
 ├── docker-stack/    # Mosquitto + Node-RED + InfluxDB + Grafana + backend
@@ -57,11 +57,11 @@ Servizi disponibili:
 |----------|-----|-------------|
 | Grafana (dashboard) | http://localhost:3000 | admin / admin |
 | Node-RED (flow) | http://localhost:1880 | — |
-| InfluxDB | http://localhost:8086 | admin / pulseguard123 |
+| InfluxDB | http://localhost:8086 | admin / alvea123 |
 | Backend API (docs) | http://localhost:8000/docs | — |
 | MQTT | localhost:1883 | anonimo |
 
-La dashboard Grafana **PulseGuard-Baby** e il flow Node-RED sono già
+La dashboard Grafana **Alvea** e il flow Node-RED sono già
 provisionati automaticamente.
 
 ### Provare senza hardware
@@ -113,12 +113,12 @@ Imposta `API_URL` in `mobile/src/config.js` con l'IP del PC. Dettagli in
 ## Pubblicare su GitHub
 
 ```bash
-cd PulseGuard-Baby
+cd Alvea
 git init
 git add .
-git commit -m "PulseGuard-Baby: firmware, backend, stack Docker, app, docs"
+git commit -m "Alvea: firmware, backend, stack Docker, app, docs"
 git branch -M main
-git remote add origin https://github.com/TUO_UTENTE/PulseGuard-Baby.git
+git remote add origin https://github.com/TUO_UTENTE/Alvea.git
 git push -u origin main
 ```
 > `secrets.py` e `.env` sono già in `.gitignore`: le tue password non finiranno

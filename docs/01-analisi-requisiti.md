@@ -1,6 +1,6 @@
 # Fase 2 — Analisi dei Requisiti
 
-Progetto **PulseGuard-Baby** — fascia indossabile per il monitoraggio del
+Progetto **Alvea** — fascia indossabile per il monitoraggio del
 battito cardiaco e della temperatura di un neonato.
 
 > Formato `RQ-XX` come da Incontro 03. Tipo: **F** funzionale / **NF** non
@@ -13,7 +13,7 @@ battito cardiaco e della temperatura di un neonato.
 | RQ-01 | Acquisire il battito (BPM) da sensore ECG AD8232 | F | Sensing | 0 |
 | RQ-02 | Acquisire la temperatura corporea | F | Sensing | 1 |
 | RQ-03 | Rilevare l'aderenza della fascia (leads-off) | F | Sensing | 1 |
-| RQ-04 | Pubblicare la telemetria a 1 Hz su MQTT `pulseguard/baby/data` | F | Telemetry | 0 |
+| RQ-04 | Pubblicare la telemetria a 1 Hz su MQTT `alvea/data` | F | Telemetry | 0 |
 | RQ-05 | Payload JSON `{device_id, timestamp, bpm, temperature, sensor_contact}` | F | Telemetry | 0 |
 | RQ-06 | Trasmissione BLE alternativa verso l'app mobile | F | Telemetry | 3 |
 | RQ-07 | Valutare soglie cliniche e generare allarmi (warning/critical) | F | Processing | 0 |
@@ -24,7 +24,7 @@ battito cardiaco e della temperatura di un neonato.
 | RQ-12 | Registrazione e login del caregiver con token JWT | F | Auth | 1 |
 | RQ-13 | Monitor in tempo reale sull'app mobile (WebSocket) | F | App | 1 |
 | RQ-14 | Associare un device a un caregiver | F | App | 2 |
-| RQ-15 | Ripubblicare gli allarmi su `pulseguard/baby/alerts` | F | Alerting | 3 |
+| RQ-15 | Ripubblicare gli allarmi su `alvea/alerts` | F | Alerting | 3 |
 
 ## Requisiti non funzionali
 

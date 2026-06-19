@@ -48,7 +48,7 @@ export default function MonitorScreen({ token }) {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: 20 }}>
-      <Text style={styles.header}>PulseGuard·Baby</Text>
+      <Text style={styles.header}>Alvea</Text>
       <Text style={styles.status}>
         {connected ? "● live" : "○ in attesa dati"} — {DEVICE_ID}
       </Text>

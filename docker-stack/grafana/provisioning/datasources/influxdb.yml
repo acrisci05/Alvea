@@ -3,7 +3,7 @@ apiVersion: 1
 datasources:
   - name: InfluxDB
     type: influxdb
-    uid: pulseguard_influx
+    uid: alvea_influx
     access: proxy
     url: http://influxdb:8086
     isDefault: true

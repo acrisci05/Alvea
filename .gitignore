@@ -14,7 +14,7 @@ venv/
 # Database locali
 *.db
 *.sqlite3
-pulseguard.db
+alvea.db
 
 # Dati runtime dei container (montati, non versionati)
 docker-stack/mosquitto/data/*

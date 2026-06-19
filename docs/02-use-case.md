@@ -8,7 +8,7 @@ flowchart LR
     subgraph attori_primari[" "]
         CG((Caregiver))
     end
-    subgraph Sistema["Sistema PulseGuard-Baby"]
+    subgraph Sistema["Sistema Alvea"]
         UC1(["Registrarsi / Accedere"])
         UC2(["Associare un dispositivo"])
         UC3(["Visualizzare battito e temperatura in tempo reale"])

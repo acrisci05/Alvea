@@ -15,7 +15,7 @@ erDiagram
     }
     DEVICE {
         int    id PK
-        string device_id "univoco, es. PULSEGUARD_BABY_04"
+        string device_id "univoco, es. ALVEA_04"
         string baby_name
         int    owner_id FK "-> CAREGIVER.id"
     }

@@ -1,4 +1,4 @@
-// Client REST minimale verso il backend PulseGuard-Baby.
+// Client REST minimale verso il backend Alvea.
 import { API_URL } from "./config";
 
 export async function login(username, password) {

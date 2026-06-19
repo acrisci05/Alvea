@@ -2,7 +2,7 @@
 # VERSIONE DI PRODUZIONE: Predisposto per sicurezza e configurazione remota (Punto 8)
 
 # --- IDENTITA' DISPOSITIVO -------------------------------------------------
-DEVICE_ID = "PULSEGUARD_ASTHMA_ANKLE_01"
+DEVICE_ID = "ALVEA_04"
 
 # --- RETE / MQTT (Configurazione Sicura) -----------------------------------
 # In produzione si usano broker remoti in cloud (es. AWS IoT, flespi, o server aziendale)

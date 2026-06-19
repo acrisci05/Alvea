@@ -18,4 +18,4 @@ jobs:
       - name: Validazione JSON/YAML
         run: |
           python -c "import json; json.load(open('docker-stack/nodered/data/flows.json'))"
-          python -c "import json; json.load(open('docker-stack/grafana/provisioning/dashboards/pulseguard_dashboard.json'))"
+          python -c "import json; json.load(open('docker-stack/grafana/provisioning/dashboards/alvea_dashboard.json'))"

@@ -1,4 +1,4 @@
-# App mobile — PulseGuard-Baby (React Native / Expo)
+# App mobile — Alvea (React Native / Expo)
 
 App di esempio che mostra la telemetria **in tempo reale** via WebSocket dal
 backend FastAPI, con login JWT.

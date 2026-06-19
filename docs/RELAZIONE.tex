@@ -1,5 +1,5 @@
 % =====================================================================
-%  PulseGuard Baby - Documentazione Tecnica di Progetto
+%  Alvea - Documentazione Tecnica di Progetto
 %  Academy "Medical Wearable Devices" - A.A. 2025/2026 - Gruppo 04
 %
 %  Compilazione: pdflatex RELAZIONE.tex  (due volte, per indice e link)
@@ -32,7 +32,7 @@
 % --- intestazione / pie' di pagina -----------------------------------
 \pagestyle{fancy}
 \fancyhf{}
-\lhead{\small PulseGuard Baby}
+\lhead{\small Alvea}
 \rhead{\small Gruppo 04 -- A.A. 2025/2026}
 \cfoot{\small Pagina \thepage\ di \pageref{LastPage}}
 \renewcommand{\headrulewidth}{0.3pt}
@@ -52,20 +52,20 @@
 % --------------------------- FRONTESPIZIO ----------------------------
 \begin{center}
   {\footnotesize ACADEMY \textbf{MEDICAL WEARABLE DEVICES} -- A.A. 2025/2026}\\[1.2em]
-  {\Huge\bfseries PulseGuard Baby}\\[0.6em]
+  {\Huge\bfseries Alvea}\\[0.6em]
   {\large Ecosistema IoT distribuito per il monitoraggio\\ cardio-termico pediatrico}\\[1.4em]
   \rule{0.7\textwidth}{0.4pt}\\[0.8em]
   {\normalsize\textbf{Gruppo 04}}\\[0.3em]
   {\small Antonio Crisci \quad$\cdot$\quad Silvia Liguoro \quad$\cdot$\quad Domenico Chiacchio \quad$\cdot$\quad Rita Pia Iacoviello}\\[1.0em]
   {\small\textit{Documentazione Tecnica di Progetto}}\\[0.4em]
-  {\footnotesize Repository: \url{https://github.com/acrisci05/PulseGuard-Baby}}
+  {\footnotesize Repository: \url{https://github.com/acrisci05/Alvea}}
 \end{center}
 
 \vspace{0.4em}
 
 \begin{center}
 \fbox{\parbox{0.92\textwidth}{\footnotesize\centering
-\textbf{Avvertenza.} PulseGuard Baby è un \textbf{prototipo didattico}, non un dispositivo
+\textbf{Avvertenza.} Alvea è un \textbf{prototipo didattico}, non un dispositivo
 medico certificato. Non deve essere impiegato per decisioni cliniche reali. Le soglie e le
 classificazioni descritte hanno finalità esclusivamente accademiche e dimostrative.}}
 \end{center}
@@ -79,7 +79,7 @@ classificazioni descritte hanno finalità esclusivamente accademiche e dimostrat
 % =====================================================================
 \section{Descrizione del Sistema}
 
-Il progetto \textbf{PulseGuard Baby} nasce come soluzione ingegneristica per il monitoraggio
+Il progetto \textbf{Alvea} nasce come soluzione ingegneristica per il monitoraggio
 continuo, non invasivo e in tempo reale dello stato cardio-termico di neonati e lattanti durante
 il sonno domestico. L'obiettivo primario è la \textbf{sorveglianza attiva} mirata a evidenziare
 precocemente anomalie della frequenza cardiaca (bradicardie/tachicardie a riposo) e sbalzi
@@ -180,7 +180,7 @@ identico tra modalità simulatore e sensore reale e tra trasporto MQTT e BLE:
 
 \begin{verbatim}
 {
-  "device_id": "PULSEGUARD_BABY_04",
+  "device_id": "ALVEA_04",
   "timestamp": 1733740000.0,
   "bpm": 121.0,
   "temperature": 36.6,
@@ -190,18 +190,18 @@ identico tra modalità simulatore e sensore reale e tra trasporto MQTT e BLE:
 \end{verbatim}
 
 La trasmissione wireless impiega il protocollo \textbf{MQTT} pubblicando sul topic
-\texttt{pulseguard/baby/data} verso il broker locale \textbf{Eclipse Mosquitto}. L'infrastruttura
+\texttt{alvea/data} verso il broker locale \textbf{Eclipse Mosquitto}. L'infrastruttura
 è orchestrata via \texttt{docker-compose.yml} e include i microservizi: \textbf{Mosquitto} (broker),
 \textbf{Node-RED} (elaborazione di flusso), \textbf{InfluxDB v2} (time-series database),
 \textbf{Grafana} (layer analitico) e \textbf{backend FastAPI} (API applicativa, persistenza
 relazionale e realtime).
 
 \subsection{Flusso di elaborazione Node-RED}
-Il flow Node-RED \texttt{PulseGuard-Baby} sottoscrive il topic \texttt{pulseguard/baby/data},
+Il flow Node-RED \texttt{Alvea} sottoscrive il topic \texttt{alvea/data},
 effettua il parsing JSON, valuta le soglie cliniche e \textbf{(i)} scrive le serie temporali su
 InfluxDB v2 via HTTP API (line protocol, measurement \texttt{vitals}) e \textbf{(ii)} pubblica gli
-eventuali allarmi sul topic \texttt{pulseguard/baby/alerts}. Grafana espone la dashboard
-\textbf{PulseGuard-Baby} provisionata automaticamente.
+eventuali allarmi sul topic \texttt{alvea/alerts}. Grafana espone la dashboard
+\textbf{Alvea} provisionata automaticamente.
 
 \subsection{API REST del backend FastAPI}
 Il backend applicativo è realizzato in \textbf{FastAPI} con autenticazione \textbf{JWT} e
@@ -403,6 +403,6 @@ correnti. Tutti i collegamenti seguenti rimandano a fonti ufficiali e sono clicc
 
 \vfill
 \begin{center}\footnotesize\textit{Documento generato a corredo del repository del progetto
-PulseGuard Baby -- Gruppo 04, A.A. 2025/2026.}\end{center}
+Alvea -- Gruppo 04, A.A. 2025/2026.}\end{center}
 
 \end{document}

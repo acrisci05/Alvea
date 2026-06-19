@@ -23,7 +23,7 @@ export default function LoginScreen({ onLogin }) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.logo}>PulseGuard·Baby</Text>
+      <Text style={styles.logo}>Alvea</Text>
       <Text style={styles.subtitle}>Monitoraggio del battito e della temperatura</Text>
       <TextInput style={styles.input} placeholder="Username" autoCapitalize="none"
         placeholderTextColor="#8da" value={username} onChangeText={setUsername} />

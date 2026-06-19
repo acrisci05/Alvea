@@ -15,7 +15,7 @@ sequenceDiagram
     participant APP as App mobile
 
     loop ogni secondo (1 Hz)
-        ESP->>MQ: publish pulseguard/baby/data (JSON)
+        ESP->>MQ: publish alvea/data (JSON)
         par Percorso dashboard
             MQ-->>NR: messaggio
             NR->>NR: soglie + anti-falso-allarme
@@ -30,7 +30,7 @@ sequenceDiagram
     end
 
     alt fascia staccata (sensor_contact=false)
-        NR->>MQ: publish pulseguard/baby/alerts (technical)
+        NR->>MQ: publish alvea/alerts (technical)
         BE-->>APP: evento alert "Fascia non a contatto"
     end
 ```

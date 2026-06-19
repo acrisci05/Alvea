@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""publish_test.py - Simulatore di telemetria PulseGuard-Baby dal PC.
+"""publish_test.py - Simulatore di telemetria Alvea dal PC.
 
 Pubblica letture simulate su MQTT esattamente come farebbe l'ESP32, per testare
 tutta la pipeline (Node-RED -> InfluxDB -> Grafana e il backend) senza hardware.
@@ -16,8 +16,8 @@ import time
 
 import paho.mqtt.client as mqtt
 
-TOPIC = "pulseguard/baby/data"
-DEVICE_ID = "PULSEGUARD_BABY_04"
+TOPIC = "alvea/data"
+DEVICE_ID = "ALVEA_04"
 
 
 def make_reading(scenario):

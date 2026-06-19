@@ -12,7 +12,7 @@ flowchart TD
         S2 --> FW
     end
 
-    FW -- "MQTT 1 Hz<br/>pulseguard/baby/data" --> MQ[(Mosquitto)]
+    FW -- "MQTT 1 Hz<br/>alvea/data" --> MQ[(Mosquitto)]
     FW -. "BLE NOTIFY (alt.)" .-> APP[App mobile<br/>React Native]
 
     subgraph Server["Server — Docker Compose"]
