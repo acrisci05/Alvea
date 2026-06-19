@@ -1,6 +1,6 @@
 # mqtt_ingest.py - Task in background: consuma la telemetria da MQTT.
 #
-# Per ogni messaggio su pulseguard/baby/data:
+# Per ogni messaggio su alvea/data:
 #   1) valida il payload (Pydantic)
 #   2) assicura l'esistenza del device
 #   3) salva la lettura su DB (e opzionalmente su InfluxDB)
@@ -48,7 +48,9 @@ async def _handle_message(payload_str: str):
         saved = await crud.save_reading(db, reading)
         influx.write_reading(reading)
 
-        fired = alerts.evaluate(reading)
+        # Soglie per-device (configurate dal medico) con fallback ai default.
+        thresholds = await crud.get_thresholds(db, reading["device_id"])
+        fired = alerts.evaluate(reading, thresholds)
         for a in fired:
             await crud.save_alert(db, reading["device_id"], a)
 

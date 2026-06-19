@@ -14,7 +14,8 @@ async def get_caregiver_by_username(db: AsyncSession, username: str):
 
 async def create_caregiver(db: AsyncSession, data: schemas.CaregiverCreate):
     user = models.Caregiver(username=data.username,
-                            hashed_password=auth.hash_password(data.password))
+                            hashed_password=auth.hash_password(data.password),
+                            role=data.role)
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -28,6 +29,11 @@ async def get_device(db: AsyncSession, device_id: str):
 
 async def get_devices_for_owner(db: AsyncSession, owner_id: int):
     res = await db.execute(select(models.Device).where(models.Device.owner_id == owner_id))
+    return res.scalars().all()
+
+async def get_all_devices(db: AsyncSession):
+    """Tutti i device: usato dal ruolo medico (visione su tutti i pazienti)."""
+    res = await db.execute(select(models.Device))
     return res.scalars().all()
 
 async def create_device(db: AsyncSession, data: schemas.DeviceCreate, owner_id: int):
@@ -84,7 +90,8 @@ async def get_latest_reading(db: AsyncSession, device_id: str):
 
 # --- Alert ---
 async def save_alert(db: AsyncSession, device_id: str, a: dict):
-    alert = models.Alert(device_id=device_id, kind=a["kind"], severity=a["severity"],
+    alert = models.Alert(device_id=device_id, parameter=a.get("parameter"),
+                         kind=a["kind"], severity=a["severity"],
                          message=a["message"], value=a.get("value"))
     db.add(alert)
     await db.commit()
@@ -98,4 +105,76 @@ async def get_recent_alerts(db: AsyncSession, device_id: str, limit: int = 50):
         .order_by(desc(models.Alert.ts))
         .limit(limit)
     )
+    return res.scalars().all()
+
+
+# --- Soglie per-device (configurabili dal medico) ---
+_THRESHOLD_FIELDS = (
+    "bpm_warn_low", "bpm_warn_high", "bpm_crit_low", "bpm_crit_high",
+    "temp_warn_low", "temp_warn_high", "temp_crit_low", "temp_crit_high",
+)
+
+async def get_threshold_row(db: AsyncSession, device_id: str):
+    res = await db.execute(
+        select(models.DeviceThreshold).where(models.DeviceThreshold.device_id == device_id)
+    )
+    return res.scalars().first()
+
+async def get_thresholds(db: AsyncSession, device_id: str) -> dict:
+    """Soglie effettive per un device: configurazione dedicata se presente,
+    altrimenti i default di config. Restituisce sempre tutte le 8 chiavi."""
+    row = await get_threshold_row(db, device_id)
+    if row is None:
+        return dict(config.DEFAULT_THRESHOLDS)
+    return {f: getattr(row, f) for f in _THRESHOLD_FIELDS}
+
+async def upsert_thresholds(db: AsyncSession, device_id: str, data: dict, username: str):
+    row = await get_threshold_row(db, device_id)
+    if row is None:
+        row = models.DeviceThreshold(device_id=device_id)
+        db.add(row)
+    for f in _THRESHOLD_FIELDS:
+        setattr(row, f, data[f])
+    row.updated_by = username
+    await db.commit()
+    await db.refresh(row)
+    return row
+
+
+# --- Scheda paziente / anamnesi ---
+async def get_patient_record(db: AsyncSession, device_id: str):
+    res = await db.execute(
+        select(models.PatientRecord).where(models.PatientRecord.device_id == device_id)
+    )
+    return res.scalars().first()
+
+async def upsert_patient_record(db: AsyncSession, device_id: str, data: dict, username: str):
+    row = await get_patient_record(db, device_id)
+    if row is None:
+        row = models.PatientRecord(device_id=device_id)
+        db.add(row)
+    for k, v in data.items():
+        setattr(row, k, v)
+    row.updated_by = username
+    await db.commit()
+    await db.refresh(row)
+    return row
+
+
+# --- Audit log ---
+async def write_audit(db: AsyncSession, action: str, username: str | None = None,
+                      role: str | None = None, resource: str | None = None,
+                      detail: str | None = None, ip: str | None = None):
+    entry = models.AuditLog(action=action, username=username, role=role,
+                            resource=resource, detail=detail, ip=ip)
+    db.add(entry)
+    await db.commit()
+    return entry
+
+async def get_audit_logs(db: AsyncSession, limit: int = 100, device_id: str | None = None):
+    q = select(models.AuditLog)
+    if device_id:
+        q = q.where(models.AuditLog.resource == device_id)
+    q = q.order_by(desc(models.AuditLog.ts)).limit(limit)
+    res = await db.execute(q)
     return res.scalars().all()

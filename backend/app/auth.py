@@ -5,6 +5,13 @@ import jwt
 
 from .config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 
+# --- Ruoli applicativi (RBAC) --------------------------------------------
+#   caregiver -> genitore/operatore: lato "Paziente", vede solo i propri device
+#   medico    -> personale sanitario: vede tutti i pazienti e configura le soglie
+ROLE_CAREGIVER = "caregiver"
+ROLE_MEDICO = "medico"
+VALID_ROLES = {ROLE_CAREGIVER, ROLE_MEDICO}
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def hash_password(password: str) -> str:

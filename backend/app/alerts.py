@@ -6,18 +6,23 @@
 from . import config
 
 
-def evaluate(reading: dict):
+def evaluate(reading: dict, thresholds: dict | None = None):
     """Restituisce una lista di alert (dict) per una singola lettura.
 
-    reading: {"bpm","temperature","sensor_contact",...}
-    alert:   {"kind","severity","message","value"}
+    reading:    {"bpm","temperature","sensor_contact",...}
+    thresholds: dizionario con le 8 chiavi delle soglie (vedi
+                config.DEFAULT_THRESHOLDS). Se None usa le soglie di default;
+                il medico puo' configurare soglie per-device (DeviceThreshold).
+    alert:      {"parameter","kind","severity","message","value"}
     """
+    th = thresholds or config.DEFAULT_THRESHOLDS
     alerts = []
     contact = reading.get("sensor_contact", True)
 
     if not contact:
         # Allarme tecnico: la valutazione fisiologica viene saltata.
         alerts.append({
+            "parameter": "contact",
             "kind": "contact_lost",
             "severity": "technical",
             "message": "Fascia non a contatto: rilevazione sospesa.",
@@ -31,29 +36,30 @@ def evaluate(reading: dict):
     # --- BPM --- (0 = lettura non ancora valida: niente allarme)
     if bpm <= 0:
         pass
-    elif bpm <= config.BPM_CRIT_LOW:
-        alerts.append(_a("bpm_low", "critical", f"Bradicardia critica: {bpm} BPM", bpm))
-    elif bpm >= config.BPM_CRIT_HIGH:
-        alerts.append(_a("bpm_high", "critical", f"Tachicardia critica: {bpm} BPM", bpm))
-    elif bpm < config.BPM_WARN_LOW:
-        alerts.append(_a("bpm_low", "warning", f"BPM sotto soglia: {bpm}", bpm))
-    elif bpm > config.BPM_WARN_HIGH:
-        alerts.append(_a("bpm_high", "warning", f"BPM sopra soglia: {bpm}", bpm))
+    elif bpm <= th["bpm_crit_low"]:
+        alerts.append(_a("bpm", "bpm_low", "critical", f"Bradicardia critica: {bpm} BPM", bpm))
+    elif bpm >= th["bpm_crit_high"]:
+        alerts.append(_a("bpm", "bpm_high", "critical", f"Tachicardia critica: {bpm} BPM", bpm))
+    elif bpm < th["bpm_warn_low"]:
+        alerts.append(_a("bpm", "bpm_low", "warning", f"BPM sotto soglia: {bpm}", bpm))
+    elif bpm > th["bpm_warn_high"]:
+        alerts.append(_a("bpm", "bpm_high", "warning", f"BPM sopra soglia: {bpm}", bpm))
 
     # --- Temperatura --- (0 = lettura non ancora valida: niente allarme)
     if temp <= 0:
         pass
-    elif temp <= config.TEMP_CRIT_LOW:
-        alerts.append(_a("temp_low", "critical", f"Ipotermia critica: {temp} C", temp))
-    elif temp >= config.TEMP_CRIT_HIGH:
-        alerts.append(_a("temp_high", "critical", f"Febbre alta: {temp} C", temp))
-    elif temp < config.TEMP_WARN_LOW:
-        alerts.append(_a("temp_low", "warning", f"Temperatura bassa: {temp} C", temp))
-    elif temp > config.TEMP_WARN_HIGH:
-        alerts.append(_a("temp_high", "warning", f"Temperatura alta: {temp} C", temp))
+    elif temp <= th["temp_crit_low"]:
+        alerts.append(_a("temperature", "temp_low", "critical", f"Ipotermia critica: {temp} C", temp))
+    elif temp >= th["temp_crit_high"]:
+        alerts.append(_a("temperature", "temp_high", "critical", f"Febbre alta: {temp} C", temp))
+    elif temp < th["temp_warn_low"]:
+        alerts.append(_a("temperature", "temp_low", "warning", f"Temperatura bassa: {temp} C", temp))
+    elif temp > th["temp_warn_high"]:
+        alerts.append(_a("temperature", "temp_high", "warning", f"Temperatura alta: {temp} C", temp))
 
     return alerts
 
 
-def _a(kind, severity, message, value):
-    return {"kind": kind, "severity": severity, "message": message, "value": value}
+def _a(parameter, kind, severity, message, value):
+    return {"parameter": parameter, "kind": kind, "severity": severity,
+            "message": message, "value": value}
