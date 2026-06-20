@@ -82,13 +82,14 @@ lo stack.
 
 3. Copia su scheda tutti i file di firmware/ e rinomina uno degli
 entrypoint in main.py:
-<br>
+
 | Scenario | File da usare come `main.py` |
 |---|---|
 | Simulatore Test-Rig via MQTT | `main_sim_mqtt.py` |
 | Hardware Reale via MQTT (Prod) | `main_real_mqtt.py` |
 | Simulatore Test-Rig via BLE | `main_sim_ble.py` |
 | Hardware Reale via BLE | `main_real_ble.py` |
+
 
 <li>PPG (MAX30102): SDA→GPIO21, SCL→GPIO22 </li>
 <li>ECG (AD8232): OUTPUT→GPIO34, LO+→GPIO32, LO-→GPIO33 </li>
