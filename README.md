@@ -82,6 +82,7 @@ lo stack.
 
 3. Copia su scheda tutti i file di firmware/ e rinomina uno degli
 entrypoint in main.py:
+<br>
 | Scenario | File da usare come `main.py` |
 |---|---|
 | Simulatore Test-Rig via MQTT | `main_sim_mqtt.py` |
