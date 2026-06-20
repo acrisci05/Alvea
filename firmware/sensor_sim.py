@@ -10,14 +10,22 @@ class SimSensor:
         self._contact = True
         
         # PRODUZIONE: Pre-allocazione della struttura dati
+        # FIX (Code Review): "device_status" e "patient_id" venivano
+        # aggiunti al dizionario solo a runtime nei vari main_*.py. In
+        # Python questo non causa un errore (i dict sono dinamici), ma
+        # contraddice la filosofia "zero allocazioni/struttura fissa"
+        # dichiarata in questo stesso file, e lascia il payload privo di
+        # quei campi se letto prima del primo invio. Pre-allocati qui.
         self._payload = {
             "device_id": config.DEVICE_ID,
+            "patient_id": None,
             "timestamp": 0,
             "bpm": 0.0,
             "skin_temperature": 0.0,
             "spo2": 0.0,
             "respiration_rate": 0.0,
             "sensor_contact": True,
+            "device_status": "INIT",
             "source": "sim_test_rig"
         }
 

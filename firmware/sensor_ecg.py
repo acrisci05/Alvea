@@ -96,9 +96,18 @@ class ECGMonitor:
             self._buffer_filled = True
 
         # Ricalcolo soglia adattiva (~10 Hz)
+        # BUGFIX: in precedenza mean/max venivano calcolati su tutto il
+        # buffer (_deriv_win = 500 campioni = 2s), anche quando solo i
+        # primi N campioni erano stati realmente scritti (gli altri sono
+        # zeri di inizializzazione). Questo abbassava artificialmente la
+        # soglia adattiva nei primi 2 secondi dopo l'avvio o un reset
+        # (es. dopo un distacco/riattacco degli elettrodi), causando
+        # falsi positivi nella rilevazione dei picchi R.
         if self._i % 25 == 0 and (self._buffer_filled or self._deriv_ptr >= SAMPLE_RATE_HZ):
-            mx = max(self._deriv_sq)
-            mean = sum(self._deriv_sq) // self._deriv_win
+            valid_n = self._deriv_win if self._buffer_filled else self._deriv_ptr
+            valid_slice = self._deriv_sq[:valid_n] if not self._buffer_filled else self._deriv_sq
+            mx = max(valid_slice)
+            mean = sum(valid_slice) // valid_n
             self._threshold = mean + int((mx - mean) * THRESHOLD_FACTOR)
 
         # Analisi del picco locale

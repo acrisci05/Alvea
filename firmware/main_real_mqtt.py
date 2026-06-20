@@ -9,6 +9,8 @@ from transport_mqtt import MQTTPublisher
 from sensor_ecg import ECGMonitor, SAMPLE_PERIOD_US
 from sensor_temp import TempSensor
 from sensor_ppg import PPGMonitor
+from alerts import AlertManager
+import ntp_time
 
 try:
     import secrets
@@ -22,9 +24,13 @@ print("=== ASTHMAGUARD PRO: AVVIO ARCHITETTURA DI PRODUZIONE ===")
 # Invece di usare una costante bloccata, usiamo una variabile aggiornabile.
 current_publish_period = config.DEFAULT_PUBLISH_PERIOD_S
 
+# AGGIUNTA (Requisito 8 - "associazione paziente-dispositivo"): id del
+# paziente attualmente assegnato a questo device. None = non assegnato.
+current_patient_id = config.DEFAULT_PATIENT_ID
+
 def mqtt_callback(topic, msg):
     """Gestisce i comandi in ingresso dal backend (es. dal Medico)."""
-    global current_publish_period
+    global current_publish_period, current_patient_id
     
     print(f"\n[COMANDO RICEVUTO] Sul topic: {topic.decode('utf-8')}")
     try:
@@ -38,16 +44,54 @@ def mqtt_callback(topic, msg):
             if nuovo_periodo > 0:
                 current_publish_period = nuovo_periodo
                 print(f"-> [OK] Frequenza di invio telemetria aggiornata a {current_publish_period} secondi.")
-                
+
+        # AGGIUNTA (Requisito 8 - associazione paziente-dispositivo): il
+        # medico/backend puo' assegnare (o rimuovere, con None/"") questo
+        # device a un paziente. Il valore viene poi incluso in ogni
+        # record di telemetria, cosi' il backend non deve fare affidamento
+        # solo su una tabella statica device_id->patient_id lato server.
+        if "patient_id" in payload:
+            nuovo_patient_id = payload["patient_id"]
+            current_patient_id = nuovo_patient_id if nuovo_patient_id else None
+            print(f"-> [OK] Device associato al paziente: {current_patient_id}")
+
         # [Aggiungere qui in futuro l'ascolto per altre configurazioni, es. soglie di alert locali]
         
     except Exception as e:
         print("-> [ERRORE] Parsing del comando MQTT fallito:", e)
 
 
-# Inizializzazione Rete e MQTT (Passiamo la callback creata sopra)
+# --- INIZIALIZZAZIONE RETE (BLOCCANTE SOLO ALL'AVVIO) ----------------------
+# A differenza del loop principale (che non deve mai bloccarsi), all'avvio e'
+# accettabile e necessario attendere la prima connessione Wi-Fi, perche':
+#  1. serve per sincronizzare l'RTC via NTP (timestamp Unix corretti);
+#  2. evita di iniziare a generare dati "ERR/WARN" inutili nei primi secondi.
 wifi_mga = WiFiManager(SSID, PSW)
+print("Wi-Fi: connessione iniziale in corso...")
+_wifi_wait_start = time.time()
+while not wifi_mga.is_connected():
+    wifi_mga.rinfresca_connessione()
+    time.sleep(0.5)
+    if time.time() - _wifi_wait_start > 20:
+        print("Wi-Fi: timeout iniziale, procedo comunque (riconnessione in background).")
+        break
+
+# --- SINCRONIZZAZIONE OROLOGIO (FONDAMENTALE PER INFLUXDB) -----------------
+# BUGFIX CRITICO: senza questa chiamata, time.time() su ESP32 MicroPython
+# restituisce secondi dall'epoca MicroPython (2000-01-01) e non dall'epoca
+# Unix (1970-01-01). Ogni timestamp scritto su InfluxDB risulterebbe
+# spostato di ~30 anni, rendendo inutilizzabili tutte le query/grafici.
+if wifi_mga.is_connected():
+    ntp_time.sync_time()
+else:
+    print("[NTP] Saltata sincronizzazione: nessuna connessione Wi-Fi disponibile.")
+
+# Inizializzazione Rete e MQTT (Passiamo la callback creata sopra)
 mqtt = MQTTPublisher(message_callback=mqtt_callback)
+
+# AGGIUNTA: gestore alert locali (sensore guasto persistente, batteria
+# scarica). Vedi alerts.py per il razionale.
+alert_mgr = AlertManager(mqtt, transport_kind="mqtt")
 
 # Inizializzazione Sensori Reali
 ecg = ECGMonitor()
@@ -57,6 +101,18 @@ ppg = PPGMonitor()
 next_sample = time.ticks_us()
 last_pub = time.time()
 ppg_sample_divider = 0
+
+# NOTA (Code Review - limite noto, non risolto in questa patch):
+# il blocco "TIMING DETERMINISTICO (250 Hz)" qui sotto convive, nello
+# stesso loop, con operazioni di rete potenzialmente bloccanti
+# (wifi_mga.rinfresca_connessione(), mqtt.check_connection() ->
+# client.connect(), mqtt.check_messages(), mqtt.publish()). Se una di
+# queste chiamate impiega piu' del periodo di campionamento (4 ms), il
+# busy-wait sottostante non recupera il ritardo accumulato: si rischia
+# jitter/perdita di campioni ECG durante riconnessioni di rete lente.
+# Una soluzione strutturale (rete su un secondo core / task asincrono,
+# socket con timeout breve, ecc.) richiede modifiche piu' ampie e
+# test su hardware reale: non inclusa in questa patch, da valutare.
 
 while True:
     # ------------------------------------------------------------------
@@ -110,6 +166,8 @@ while True:
             status_string = "ERR_TEMP_SENSOR_FAULT"
         elif not mqtt.is_connected:
             status_string = "WARN_NETWORK_DISCONNECTED"
+        elif current_patient_id is None:
+            status_string = "WARN_PATIENT_NOT_ASSIGNED"
         else:
             status_string = "SYSTEM_OK"
 
@@ -117,8 +175,37 @@ while True:
         spo2, resp_rate = ppg.compute_metrics() if contact_ppg else (0.0, 0.0)
         final_temp = temp_val if temp_val is not None else 0.0
 
+        # AGGIUNTA (Requisito 7 - alert "assenza di dati"/guasto sensore,
+        # Requisito 1 - "stato del dispositivo"): segnala su TOPIC_ALERT
+        # le condizioni di guasto hardware solo quando sono persistenti
+        # (vedi ALERT_FAULT_STREAK_THRESHOLD in config.py), per non
+        # floodare il broker per ogni singolo glitch transitorio.
+        alert_mgr.check_fault(
+            "ecg_leads_off", not contact_ecg,
+            "bpm", "Elettrodi ECG scollegati / non a contatto rilevato",
+            gravita="WARNING", patient_id=current_patient_id,
+        )
+        alert_mgr.check_fault(
+            "ppg_no_contact", not contact_ppg,
+            "spo2", "Sensore PPG non a contatto con la pelle",
+            gravita="WARNING", patient_id=current_patient_id,
+        )
+        alert_mgr.check_fault(
+            "temp_sensor_fault", temp_val is None,
+            "skin_temperature", "Guasto o lettura non disponibile dal sensore di temperatura",
+            gravita="CRITICAL", patient_id=current_patient_id,
+        )
+
+        # NOTA SUL FORMATO (Requisito 1 - "tipo di parametro misurato"):
+        # qui inviamo un singolo record multi-parametro per timestamp (un
+        # "campionamento" del paziente), non un record per parametro. E'
+        # una scelta di design lecita e comune (riduce il numero di
+        # pubblicazioni MQTT), ma va documentata nella relazione: il
+        # backend/Node-Red dovra' fare il fan-out dei singoli campi (bpm,
+        # spo2, ...) come misure/field separati in InfluxDB.
         reading = {
             "device_id": config.DEVICE_ID,
+            "patient_id": current_patient_id,
             "timestamp": time.time(),
             "bpm": float(bpm),
             "skin_temperature": float(final_temp),

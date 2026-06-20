@@ -12,6 +12,18 @@ import config
 _IRQ_CENTRAL_CONNECT = const(1)
 _IRQ_CENTRAL_DISCONNECT = const(2)
 _IRQ_GATTS_WRITE = const(3)
+_IRQ_MTU_EXCHANGED = const(21)
+
+# FIX (Code Review): il payload JSON della telemetria (device_id,
+# timestamp, bpm, skin_temperature, spo2, respiration_rate,
+# sensor_contact, device_status, source...) supera abbondantemente i 20
+# byte utili dell'MTU BLE di default (23 byte totali = 20 di payload
+# ATT). Senza negoziare un MTU piu' grande, gatts_notify() rischia di
+# inviare un pacchetto troncato che l'app riceve corrotto/incompleto.
+# Richiediamo quindi un MTU esteso e teniamo traccia di quello
+# effettivamente negoziato con il central (vedi _IRQ_MTU_EXCHANGED).
+DESIRED_MTU = 185  # payload utile ~182 byte, sufficiente per il JSON attuale
+DEFAULT_ATT_MTU = 23
 
 
 class BLEPeripheral:
@@ -20,6 +32,9 @@ class BLEPeripheral:
         self.conn_handle = None
         # Funzione chiamata con il payload (bytes) scritto dall'app/medico
         self.command_callback = command_callback
+        # MTU negoziato con il central (aggiornato da _IRQ_MTU_EXCHANGED).
+        # Finche' non avviene lo scambio, va assunto il default BLE (23 byte).
+        self.current_mtu = DEFAULT_ATT_MTU
 
         self.SERVICE_UUID = bluetooth.UUID(config.BLE_SERVICE_UUID)
         self.CHAR_UUID = bluetooth.UUID(config.BLE_CHAR_UUID)
@@ -27,6 +42,10 @@ class BLEPeripheral:
 
         self.ble = bluetooth.BLE()
         self.ble.active(True)
+        try:
+            self.ble.config(mtu=DESIRED_MTU)
+        except Exception as e:
+            print("BLE: impossibile impostare MTU esteso, resto sul default:", e)
         self._register_services()
         self.ble.irq(self._irq_handler)
         self._start_advertising()
@@ -52,6 +71,10 @@ class BLEPeripheral:
                 # La callback viene eseguita fuori dal contesto critico IRQ:
                 # deve restare leggera (solo parsing JSON + aggiornamento variabili).
                 self.command_callback(payload)
+        elif event == _IRQ_MTU_EXCHANGED:
+            conn_handle, mtu = data
+            self.current_mtu = mtu
+            print("BLE: MTU negoziato con il central:", mtu)
 
     def _adv_payload(self):
         p = bytearray()
@@ -71,5 +94,13 @@ class BLEPeripheral:
         if self.conn_handle is None:
             return False
         msg = json.dumps(payload_dict)
+        # Spazio utile per il payload ATT = MTU negoziato - 3 byte di header.
+        usable_payload = self.current_mtu - 3
+        if len(msg) > usable_payload:
+            print(
+                "BLE: ATTENZIONE - payload di", len(msg),
+                "byte supera l'MTU corrente (", usable_payload,
+                "byte utili). La notifica potrebbe arrivare troncata."
+            )
         self.ble.gatts_notify(self.conn_handle, self.char_handle, msg)
         return True

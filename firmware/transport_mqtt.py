@@ -5,9 +5,27 @@ import time
 from umqtt.simple import MQTTClient
 import config
 
+try:
+    import secrets
+    _MQTT_USER = getattr(secrets, "MQTT_USER", config.MQTT_USER)
+    _MQTT_PASS = getattr(secrets, "MQTT_PASS", config.MQTT_PASS)
+except ImportError:
+    _MQTT_USER = config.MQTT_USER
+    _MQTT_PASS = config.MQTT_PASS
+
+
 class MQTTPublisher:
     def __init__(self, message_callback=None):
-        self.client = MQTTClient(config.DEVICE_ID, config.MQTT_BROKER, port=config.MQTT_PORT)
+        # BUGFIX: in precedenza user/password non venivano passati al client,
+        # quindi l'autenticazione MQTT (Requisito 10) non era mai applicata
+        # anche se le credenziali erano definite in config.py.
+        self.client = MQTTClient(
+            config.DEVICE_ID,
+            config.MQTT_BROKER,
+            port=config.MQTT_PORT,
+            user=_MQTT_USER,
+            password=_MQTT_PASS,
+        )
         self.is_connected = False
         self._last_reconnect_attempt = 0
         self._reconnect_interval = 5 
@@ -27,6 +45,10 @@ class MQTTPublisher:
             print("MQTT: In ascolto su", config.TOPIC_CMD)
             return True
         except Exception as e:
+            # BUGFIX: l'eccezione veniva soppressa senza essere loggata,
+            # rendendo impossibile capire perche' la connessione MQTT falliva
+            # (es. credenziali errate, broker irraggiungibile, ecc.).
+            print("MQTT: Connessione al broker fallita:", e)
             self.is_connected = False
             return False
 
@@ -63,3 +85,10 @@ class MQTTPublisher:
             print("MQTT: Errore di invio spontaneo, disconnessione rilevata.")
             self.is_connected = False
             return False
+    # FIX (Code Review): qui erano presenti ridefinizioni duplicate e
+    # identiche di check_connection(), check_messages() e publish()
+    # (probabile errore di copia/incolla). In Python la seconda
+    # definizione sovrascrive silenziosamente la prima nel namespace
+    # della classe: non causava un errore a runtime, ma era codice morto
+    # pericoloso (rischio di modifiche future applicate a una sola delle
+    # due copie). Rimosso il blocco duplicato.
