@@ -1,14 +1,18 @@
-import React, { useState } from "react";
-import { StatusBar } from "react-native";
-import LoginScreen from "./src/screens/LoginScreen";
-import MonitorScreen from "./src/screens/MonitorScreen";
+// App.js
+import React from 'react';
+import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+
+import { AuthProvider } from './src/context/AuthContext';
+import RootNavigator from './src/navigation/RootNavigator';
 
 export default function App() {
-  const [token, setToken] = useState(null);
   return (
-    <>
-      <StatusBar barStyle="light-content" />
-      {token ? <MonitorScreen token={token} /> : <LoginScreen onLogin={setToken} />}
-    </>
+    <SafeAreaProvider>
+      <StatusBar style="light" />
+      <AuthProvider>
+        <RootNavigator />
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }

@@ -1,12 +1,8 @@
 {
   "expo": {
-    "name": "PulseGuard-Baby",
-    "slug": "pulseguard-baby",
+    "name": "alvea-app",
+    "slug": "alvea-app",
     "version": "1.0.0",
-    "orientation": "portrait",
-    "userInterfaceStyle": "light",
-    "splash": { "backgroundColor": "#0B132B" },
-    "android": { "package": "com.pulseguard.baby" },
-    "ios": { "bundleIdentifier": "com.pulseguard.baby" }
+    "plugins": []
   }
 }
