@@ -4,15 +4,9 @@
 import time
 import machine
 
-TEMP_MODE = "ds18b20"  # In produzione si fissa l'hardware reale: "ds18b20" o "ntc"
+TEMP_MODE = "ntc" 
 PIN_DS18B20 = 4
 PIN_NTC     = 35       
-
-# Il DS18B20 richiede ~750ms per completare una conversione a 12 bit.
-# Non possiamo bloccare il loop principale (che gira a 250 Hz / 4ms per
-# ciclo), quindi gestiamo la conversione in modo NON bloccante con una
-# macchina a stati: avviamo la conversione, e leggiamo il risultato solo
-# dopo che il tempo minimo e' trascorso.
 DS18B20_CONVERSION_MS = 750
 
 class TempSensor:
@@ -42,16 +36,7 @@ class TempSensor:
     def read(self):
         """
         Restituisce la temperatura cutanea (31-34 C) o None se guasto/non
-        ancora disponibile. Garantisce la conformita' al requisito sulla
-        qualita' del dato.
-
-        BUGFIX: la versione precedente chiamava convert_temp() e leggeva
-        il risultato nello stesso ciclo, ma il DS18B20 richiede ~750ms per
-        completare la conversione: il valore letto poteva quindi essere
-        quello della conversione PRECEDENTE (stale) o un dato non valido.
-        Ora la conversione e' gestita in modo non bloccante a macchina a
-        stati: viene avviata una volta e il risultato viene letto solo al
-        primo read() successivo al trascorrere di DS18B20_CONVERSION_MS.
+        ancora disponibile.
         """
         if not self._hardware_ok:
             return None
@@ -74,12 +59,10 @@ class TempSensor:
 
                 elapsed = time.ticks_diff(now_ms, self._conversion_started_ms)
                 if elapsed < DS18B20_CONVERSION_MS:
-                    # Conversione ancora in corso: non leggere ancora,
-                    # restituisci l'ultimo valore valido noto.
+                    # Conversione ancora in corso
                     return self._last_good_temp
 
-                # Conversione completata: leggi il risultato e avviane
-                # immediatamente una nuova per il prossimo ciclo.
+                # Conversione completata: leggi il risultato e avviane una nuova per il prossimo ciclo.
                 temp = round(self._bus.read_temp(self._roms[0]), 1)
                 self._last_good_temp = temp
                 self._bus.convert_temp()

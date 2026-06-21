@@ -3,14 +3,6 @@
 import network
 import time
 
-# BUGFIX (Code Review): la versione precedente non usciva mai dallo stato
-# STAT_CONNECTING. Se il tentativo di associazione all'AP si impalla (SSID
-# fuori portata, password errata, AP che non risponde al primo aggancio),
-# wlan.status() resta a STAT_CONNECTING indefinitamente: la condizione
-# "if not STAT_CONNECTING" e' per sempre falsa e wlan.connect() non viene
-# MAI piu' richiamato. Il dispositivo restava quindi bloccato in stato
-# "sto connettendo" senza riconnettersi davvero, ne' generare un WARN. Ora
-# un timeout sul singolo tentativo forza un nuovo wlan.connect().
 WIFI_CONNECT_TIMEOUT_S = 15
 
 class WiFiManager:
@@ -34,7 +26,7 @@ class WiFiManager:
         status = self.wlan.status()
 
         if status == network.STAT_CONNECTING:
-            # Tentativo in corso: controlliamo se ha superato il timeout.
+            # Tentativo in corso: controllo se il timeout è stato superato.
             if self._connect_attempt_started is None:
                 self._connect_attempt_started = time.time()
             elif time.time() - self._connect_attempt_started > WIFI_CONNECT_TIMEOUT_S:

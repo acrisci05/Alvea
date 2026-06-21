@@ -1,12 +1,6 @@
 # ntp_time.py - Sincronizzazione RTC via NTP per ottenere Unix timestamp reali.
 #
-# PROBLEMA RISOLTO: su MicroPython/ESP32, time.time() di default conta i
-# secondi dall'epoca MicroPython (2000-01-01), NON dall'epoca Unix
-# (1970-01-01). Se l'RTC non viene sincronizzato via NTP, ogni record
-# scritto su InfluxDB avra' un timestamp sbagliato di ~30 anni, rompendo
-# silenziosamente tutte le query temporali e i grafici Grafana.
-#
-# Questo modulo va chiamato UNA VOLTA dopo la connessione Wi-Fi, prima di
+# Questo modulo va chiamato una volta dopo la connessione Wi-Fi, prima di
 # iniziare a pubblicare telemetria.
 
 import time

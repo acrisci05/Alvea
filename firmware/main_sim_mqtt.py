@@ -1,11 +1,5 @@
 # main_sim_mqtt.py - Telemetria SIMULATA via MQTT (Logica asincrona di produzione).
-#
-# FIX (Code Review): a differenza di main_real_mqtt.py, questo file non
-# registrava alcuna callback comandi e non chiamava mai
-# mqtt.check_messages(): il Requisito 8 ("Configurazione da parte del
-# medico") non era quindi dimostrabile/testabile usando la pipeline
-# simulata (l'unica eseguibile senza hardware reale). Aggiunta la stessa
-# logica gia' presente in main_real_mqtt.py per allineare i due percorsi.
+
 
 import time
 import machine
@@ -23,18 +17,14 @@ try:
 except ImportError:
     raise RuntimeError("File secrets.py mancante.")
 
-print("== AsthmaGuard TEST-RIG :: SIMULATORE MQTT ASINCRONO ==")
+print("== ALVEA TEST-RIG :: SIMULATORE MQTT ASINCRONO ==")
 
-# --- VARIABILE DI CONFIGURAZIONE DINAMICA (Punto 8) ---
+# --- VARIABILE DI CONFIGURAZIONE DINAMICA ---
 current_publish_period = config.DEFAULT_PUBLISH_PERIOD_S
-
-# AGGIUNTA (Requisito 8 - associazione paziente-dispositivo)
 current_patient_id = config.DEFAULT_PATIENT_ID
 
 
 def mqtt_command_callback(topic, msg):
-    """Gestisce i comandi in ingresso dal backend (es. dal Medico), anche
-    in modalita' simulata: stessa logica di main_real_mqtt.py."""
     global current_publish_period, current_patient_id
 
     print(f"\n[COMANDO RICEVUTO] Sul topic: {topic.decode('utf-8')}")
@@ -59,10 +49,7 @@ def mqtt_command_callback(topic, msg):
 
 wifi_mga = WiFiManager(SSID, PSW)
 
-# --- ATTESA INIZIALE WI-FI + SYNC NTP --------------------------------------
-# Stesso bug critico del firmware reale: senza sync NTP, time.time() su
-# ESP32 MicroPython non e' un Unix timestamp valido e InfluxDB scrivera'
-# i punti con una data sbagliata di ~30 anni.
+# --- ATTESA INIZIALE WI-FI + SYNC NTP ---
 print("Wi-Fi: connessione iniziale in corso...")
 _wifi_wait_start = time.time()
 while not wifi_mga.is_connected():
@@ -92,28 +79,18 @@ while True:
             mqtt.check_messages()
     else:
         mqtt.is_connected = False
-
-    # Invio temporizzato (ora usa current_publish_period, configurabile dal medico)
+        
     if time.time() - last_pub >= current_publish_period:
         last_pub = time.time()
         
         reading = sensor.read()
         reading["patient_id"] = current_patient_id
-
-        # AGGIUNTA (Requisito 7 - alert "assenza di dati"/guasto sensore):
-        # anche in modalita' simulata, una caduta di contatto persistente
-        # (CONTACT_DROP_PROB in config.py) genera un alert dedicato su
-        # TOPIC_ALERT, per poter dimostrare il flusso end-to-end degli
-        # alert hardware senza richiedere l'hardware reale.
         alert_mgr.check_fault(
             "sim_sensor_contact_lost", not reading["sensor_contact"],
             "sensor_contact", "Simulazione: caduta di contatto del sensore rilevata",
             gravita="WARNING", patient_id=current_patient_id,
         )
-
-        # AGGIUNTA (Requisito 7 - "batteria bassa del dispositivo"): la
-        # batteria simulata si scarica progressivamente (vedi sensor_sim.py),
-        # cosi' anche la pipeline simulata dimostra l'alert end-to-end.
+        
         alert_mgr.check_battery(reading["battery_pct"], patient_id=current_patient_id)
 
         # Inietta lo stato di rete nel pacchetto diagnostico
@@ -129,5 +106,5 @@ while True:
             mqtt.publish(reading)
             print("[SIM TX]:", reading)
             
-    # Un piccolissimo sleep per allentare la CPU quando simula (risparmio energetico)
+    # Un piccolissimo sleep per allentare la CPU in fase di simulazione (risparmio energetico)
     time.sleep_ms(10)

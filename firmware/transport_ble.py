@@ -1,8 +1,5 @@
-# transport_ble.py - Periferica BLE che invia la telemetria via NOTIFY e
-# riceve comandi/configurazioni via WRITE (Punto 8 dei requisiti).
-#
-# Basato su ble_notify_es2.py (versione incapsulata, non bloccante): la logica
-# pesante NON va mai dentro l'IRQ, altrimenti il central si disconnette.
+# transport_ble.py - Periferica BLE che invia la telemetria via NOTIFY e riceve comandi/configurazioni via WRITE.
+
 from micropython import const
 import bluetooth
 import json
@@ -14,14 +11,6 @@ _IRQ_CENTRAL_DISCONNECT = const(2)
 _IRQ_GATTS_WRITE = const(3)
 _IRQ_MTU_EXCHANGED = const(21)
 
-# FIX (Code Review): il payload JSON della telemetria (device_id,
-# timestamp, bpm, skin_temperature, spo2, respiration_rate,
-# sensor_contact, device_status, source...) supera abbondantemente i 20
-# byte utili dell'MTU BLE di default (23 byte totali = 20 di payload
-# ATT). Senza negoziare un MTU piu' grande, gatts_notify() rischia di
-# inviare un pacchetto troncato che l'app riceve corrotto/incompleto.
-# Richiediamo quindi un MTU esteso e teniamo traccia di quello
-# effettivamente negoziato con il central (vedi _IRQ_MTU_EXCHANGED).
 DESIRED_MTU = 185  # payload utile ~182 byte, sufficiente per il JSON attuale
 DEFAULT_ATT_MTU = 23
 
@@ -78,7 +67,7 @@ class BLEPeripheral:
 
     def _adv_payload(self):
         p = bytearray()
-        p += b'\x02\x01\x06'                                  # flags
+        p += b'\x02\x01\x06'                                         # flags
         p += bytes([len(self.name) + 1, 0x09]) + self.name.encode()  # nome
         return p
 

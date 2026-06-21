@@ -1,33 +1,10 @@
 # sensor_ppg.py - Acquisizione PPG da sensore analogico via ADC.
-#
-# IMPLEMENTAZIONE IN PRODUZIONE: Include filtro IIR Passa-Basso
-# per la purificazione del segnale e calcolo accurato del Respiro.
-#
-# FIX (Code Review): i pin ADC erano in conflitto con altri sensori:
-#   - PIN_PPG_RED era 34, identico a PIN_ECG (sensor_ecg.py) -> le due
-#     letture analogiche (elettrodo ECG e fotodiodo PPG rosso) finivano
-#     sullo stesso GPIO fisico, corrompendo entrambi i segnali.
-#   - PIN_PPG_IR era 35, identico a PIN_NTC (sensor_temp.py) -> conflitto
-#     latente se in futuro si passa a TEMP_MODE = "ntc".
-# Sono stati spostati su GPIO36 (SVP/ADC1_CH0) e GPIO39 (SVN/ADC1_CH3),
-# entrambi input-only e liberi rispetto a ECG (32/33/34) e TEMP (4/35).
-# Verifica comunque sempre la corrispondenza con il cablaggio reale.
-#
-# FIX (Code Review): i buffer circolari erano implementati con liste
-# Python fatte crescere via append()/pop(0). pop(0) su una lista e'
-# un'operazione O(n) (deve riallineare tutti gli elementi), eseguita qui
-# a 50 Hz su una finestra di 500 campioni: costosa e in contraddizione
-# con la filosofia "zero allocazioni dinamiche" gia' adottata in
-# sensor_ecg.py. Sono stati sostituiti con due array a dimensione fissa
-# pre-allocati, scritti tramite indice circolare (stesso pattern del
-# Ring Buffer usato per l'ECG).
 
 import time
 import machine
 import config
 
 # --- Parametri Sensore Analogico (ADC) ---
-# Sostituisci questi pin con quelli effettivamente cablati sul tuo hardware
 PIN_PPG_RED = 36
 PIN_PPG_IR  = 39
 
@@ -56,8 +33,6 @@ class PPGMonitor:
         self.adc_ir.atten(machine.ADC.ATTN_11DB)
         self.adc_ir.width(machine.ADC.WIDTH_12BIT)
 
-        # PRODUZIONE: buffer circolari pre-allocati a dimensione fissa
-        # (nessuna allocazione/deallocazione nel loop a 50 Hz).
         self._red_buffer = [0] * BUFFER_SIZE
         self._ir_buffer = [0] * BUFFER_SIZE
         self._buf_ptr = 0
@@ -98,9 +73,6 @@ class PPGMonitor:
         # -------------------------------------------------------------
         # 1. Calcolo SpO2 (Ratio of Ratios)
         # -------------------------------------------------------------
-        # Su un buffer circolare pieno, max/min/sum non dipendono
-        # dall'ordine temporale: si puo' lavorare direttamente sugli
-        # array cosi' come sono, senza ricostruirli in ordine.
         dc_red = sum(self._red_buffer) / BUFFER_SIZE
         dc_ir = sum(self._ir_buffer) / BUFFER_SIZE
 
@@ -118,10 +90,6 @@ class PPGMonitor:
         # -------------------------------------------------------------
         # 2. Calcolo Frequenza Respiratoria (Filtro IIR Passa-Basso)
         # -------------------------------------------------------------
-        # Qui l'ORDINE temporale conta (rilevazione di attraversamenti),
-        # quindi ricostruiamo la sequenza cronologica a partire dal
-        # puntatore circolare. Questa ricostruzione alloca una lista,
-        # ma avviene solo qui, a ~1 Hz, non nel percorso a 50 Hz di feed().
         ordered_ir = self._ir_buffer[self._buf_ptr:] + self._ir_buffer[:self._buf_ptr]
 
         alpha = 0.05

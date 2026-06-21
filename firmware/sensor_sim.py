@@ -1,5 +1,4 @@
 # sensor_sim.py - Sorgente dati SIMULATA (HIL Testing per produzione).
-# Ottimizzato: zero allocazioni dinamiche nel loop principale.
 
 import time
 import random
@@ -8,14 +7,6 @@ import config
 class SimSensor:
     def __init__(self):
         self._contact = True
-        
-        # PRODUZIONE: Pre-allocazione della struttura dati
-        # FIX (Code Review): "device_status" e "patient_id" venivano
-        # aggiunti al dizionario solo a runtime nei vari main_*.py. In
-        # Python questo non causa un errore (i dict sono dinamici), ma
-        # contraddice la filosofia "zero allocazioni/struttura fissa"
-        # dichiarata in questo stesso file, e lascia il payload privo di
-        # quei campi se letto prima del primo invio. Pre-allocati qui.
         self._payload = {
             "device_id": config.DEVICE_ID,
             "patient_id": None,

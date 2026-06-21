@@ -1,13 +1,4 @@
 # main_sim_ble.py - Telemetria SIMULATA via BLE NOTIFY (demo/test locale).
-#
-# NOTA: vedi main_real_ble.py - questo path NON e' la pipeline ufficiale
-# richiesta dal regolamento (che impone MQTT per la maglietta). Usare
-# main_sim_mqtt.py per i test end-to-end con InfluxDB/Grafana.
-#
-# FIX (Code Review): non veniva registrata alcuna command_callback sulla
-# BLEPeripheral, quindi anche qui il Requisito 8 ("Configurazione da
-# parte del medico") non era dimostrabile in modalita' simulata.
-# Aggiunta la stessa logica gia' presente in main_real_ble.py.
 
 import time
 import json
@@ -16,18 +7,15 @@ from sensor_sim import SimSensor
 from transport_ble import BLEPeripheral
 from alerts import AlertManager
 
-print("== AsthmaGuard TEST-RIG :: SIMULATORE BLE ASINCRONO (modalita' alternativa/demo) ==")
+print("== ALVEA TEST-RIG :: SIMULATORE BLE ASINCRONO (modalita' alternativa/demo) ==")
 
-# --- VARIABILE DI CONFIGURAZIONE DINAMICA (Punto 8) ---
+# --- VARIABILE DI CONFIGURAZIONE DINAMICA ---
 current_publish_period = config.DEFAULT_PUBLISH_PERIOD_S
-
-# AGGIUNTA (Requisito 8 - associazione paziente-dispositivo)
 current_patient_id = config.DEFAULT_PATIENT_ID
 
 
 def ble_command_callback(payload):
-    """Gestisce i comandi/configurazioni scritti dall'app del medico via BLE
-    (stessa logica di main_real_ble.py, qui applicata anche al simulatore)."""
+    """Gestione dei comandi/configurazioni scritti dall'app del medico via BLE. """
     global current_publish_period, current_patient_id
 
     print("\n[COMANDO BLE RICEVUTO]")
@@ -69,7 +57,6 @@ while True:
             gravita="WARNING", patient_id=current_patient_id,
         )
 
-        # AGGIUNTA (Requisito 7 - "batteria bassa del dispositivo")
         alert_mgr.check_battery(reading["battery_pct"], patient_id=current_patient_id)
         
         if ble.is_connected():

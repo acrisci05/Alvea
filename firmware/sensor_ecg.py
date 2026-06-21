@@ -1,5 +1,4 @@
 # sensor_ecg.py - Acquisizione ECG reale da sensore AD8232 + stima del BPM.
-# VERSIONE DI PRODUZIONE: Allocazione di memoria statica (Zero Garbage Collector)
 
 import time
 import machine
@@ -40,8 +39,7 @@ class ECGMonitor:
         self.adc.width(machine.ADC.WIDTH_12BIT)   
         self.lo_plus = machine.Pin(PIN_LO_PLUS, machine.Pin.IN)
         self.lo_minus = machine.Pin(PIN_LO_MINUS, machine.Pin.IN)
-
-        # PRODUZIONE: Buffer circolare pre-allocato a dimensione fissa
+        
         self._deriv_win = SAMPLE_RATE_HZ * 2
         self._deriv_sq = [0] * self._deriv_win  
         self._deriv_ptr = 0 # Indice di scrittura corrente
@@ -96,13 +94,6 @@ class ECGMonitor:
             self._buffer_filled = True
 
         # Ricalcolo soglia adattiva (~10 Hz)
-        # BUGFIX: in precedenza mean/max venivano calcolati su tutto il
-        # buffer (_deriv_win = 500 campioni = 2s), anche quando solo i
-        # primi N campioni erano stati realmente scritti (gli altri sono
-        # zeri di inizializzazione). Questo abbassava artificialmente la
-        # soglia adattiva nei primi 2 secondi dopo l'avvio o un reset
-        # (es. dopo un distacco/riattacco degli elettrodi), causando
-        # falsi positivi nella rilevazione dei picchi R.
         if self._i % 25 == 0 and (self._buffer_filled or self._deriv_ptr >= SAMPLE_RATE_HZ):
             valid_n = self._deriv_win if self._buffer_filled else self._deriv_ptr
             valid_slice = self._deriv_sq[:valid_n] if not self._buffer_filled else self._deriv_sq

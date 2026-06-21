@@ -1,16 +1,8 @@
 # main_real_ble.py - Firmware ALTERNATIVO via BLE (demo/test locale).
 #
-# NOTA IMPORTANTE: il regolamento Academy richiede esplicitamente che, in
-# caso di utilizzo della maglietta, i dati siano trasmessi via MQTT dalla
-# ESP32 (Requisito 1). Questo file NON e' la pipeline ufficiale di
-# consegna: e' utile solo per test locali senza infrastruttura di rete
-# (Wi-Fi/broker), ma il BLE non alimenta InfluxDB/Grafana. Per la
-# consegna usare main_real_mqtt.py.
-#
 # Il campo "timestamp" qui sotto NON e' sincronizzato via NTP (a differenza
 # della pipeline MQTT) perche' in modalita' BLE-only non c'e' garanzia di
-# accesso a Internet: se serve un timestamp assoluto corretto, sincronizzare
-# l'orologio lato app mobile ricevente, non lato device.
+# accesso a Internet
 
 import time
 import json
@@ -23,15 +15,14 @@ from sensor_ppg import PPGMonitor
 from sensor_battery import BatteryMonitor
 from alerts import AlertManager
 
-print("=== ASTHMAGUARD PRO: AVVIO ARCHITETTURA BLE (modalita' alternativa/demo) ===")
+print("=== ALVEA: AVVIO ARCHITETTURA BLE (modalita' alternativa/demo) ===")
 
 # --- VARIABILE DI CONFIGURAZIONE DINAMICA (Punto 8) ---
 # Aggiornabile a runtime dal medico tramite scrittura BLE sulla characteristic
-# di comando (vedi ble_command_callback piu' sotto). Stesso schema usato in
-# main_real_mqtt.py per garantire parita' funzionale tra i due trasporti.
+# di comando
 current_publish_period = config.DEFAULT_PUBLISH_PERIOD_S
 
-# AGGIUNTA (Requisito 8 - associazione paziente-dispositivo)
+# associazione paziente-dispositivo
 current_patient_id = config.DEFAULT_PATIENT_ID
 
 
@@ -55,16 +46,14 @@ def ble_command_callback(payload):
             current_patient_id = nuovo_patient_id if nuovo_patient_id else None
             print(f"-> [OK] Device associato al paziente: {current_patient_id}")
 
-        # [Aggiungere qui in futuro l'ascolto per altre configurazioni, es. soglie di alert locali]
-
     except Exception as e:
         print("-> [ERRORE] Parsing del comando BLE fallito:", e)
 
 
-# Inizializzazione BLE (con callback comandi per il Punto 8)
+# Inizializzazione BLE
 ble = BLEPeripheral(command_callback=ble_command_callback)
 
-# AGGIUNTA: gestore alert locali via BLE (vedi alerts.py per il razionale)
+# gestore alert locali via BLE
 alert_mgr = AlertManager(ble, transport_kind="ble")
 
 # Inizializzazione Sensori Reali
@@ -77,12 +66,6 @@ battery = BatteryMonitor()
 next_sample = time.ticks_us()
 last_pub = time.time()
 ppg_sample_divider = 0
-
-# NOTA (Code Review - limite noto, non risolto in questa patch): vedi
-# stessa nota in main_real_mqtt.py. In questo file il rischio e' minore
-# perche' lo stack BLE di MicroPython gestisce la connessione in modo
-# asincrono via IRQ, ma send_json()/gatts_notify() restano comunque
-# chiamate eseguite nello stesso loop a 250 Hz.
 
 print("Attesa connessione App Mobile...")
 
@@ -129,10 +112,6 @@ while True:
         bpm = ecg.compute_bpm() if contact_ecg else 0
         spo2, resp_rate = ppg.compute_metrics() if contact_ppg else (0.0, 0.0)
         final_temp = temp_val if temp_val is not None else 0.0
-
-        # AGGIUNTA (Requisito 7 - alert hardware): stessa logica di
-        # main_real_mqtt.py, qui inviata via NOTIFY BLE sul medesimo canale
-        # della telemetria (vedi alerts.py).
         alert_mgr.check_fault(
             "ecg_leads_off", not contact_ecg,
             "bpm", "Elettrodi ECG scollegati / non a contatto rilevato",
@@ -149,7 +128,7 @@ while True:
             gravita="CRITICAL", patient_id=current_patient_id,
         )
 
-        # AGGIUNTA (Requisito 7 - "batteria bassa del dispositivo")
+        # Batteria bassa del dispositivo
         battery_pct = battery.read_percent()
         alert_mgr.check_battery(battery_pct, patient_id=current_patient_id)
 
