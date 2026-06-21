@@ -19,6 +19,7 @@
 # parametro, descrizione, livello di gravita', timestamp).
 
 import time
+import json
 import config
 
 
@@ -53,12 +54,23 @@ class AlertManager:
                 try:
                     self.transport.client.publish(
                         config.TOPIC_ALERT,
-                        __import__("json").dumps(alert_dict)
+                        json.dumps(alert_dict)
                     )
                     print("[ALERT MQTT TX]:", alert_dict)
                     return True
                 except Exception as e:
+                    # BUGFIX (Code Review): in precedenza l'eccezione veniva
+                    # solo loggata, senza aggiornare lo stato is_connected
+                    # del transport. transport_mqtt.MQTTPublisher.publish()
+                    # invece imposta is_connected = False alla prima
+                    # eccezione: senza questa riga, se il broker cade
+                    # esattamente durante l'invio di un alert, il firmware
+                    # continuava a credersi online (mqtt.is_connected
+                    # restava True) fino al prossimo controllo di rete
+                    # casuale, perdendo silenziosamente sia la telemetria
+                    # che eventuali alert successivi nel frattempo.
                     print("[ALERT] Invio MQTT fallito:", e)
+                    self.transport.is_connected = False
                     return False
             else:
                 print("[ALERT LOCALE - rete assente]:", alert_dict)
@@ -77,11 +89,23 @@ class AlertManager:
                 return False
         return False
 
-    def check_fault(self, condition_name, is_faulty, parametro, descrizione, gravita="WARNING", patient_id=None):
+    def check_fault(self, condition_name, is_faulty, parametro, descrizione, gravita="WARNING",
+                     patient_id=None, descrizione_risolto=None):
         """Da chiamare ad ogni ciclo di telemetria con lo stato corrente
         (vero/falso) di una condizione di guasto. Pubblica un alert solo
         alla transizione "diventa persistente" e un altro alla
-        risoluzione, evitando di floodare il broker."""
+        risoluzione, evitando di floodare il broker.
+
+        descrizione_risolto: testo esplicito da usare per l'alert di
+        risoluzione. Se omesso, si ricade sul vecchio comportamento
+        (sostituzione testuale "rilevato" -> "risolto"), adatto solo a
+        descrizioni statiche senza dati numerici incorporati. Per
+        condizioni come la batteria, dove la descrizione contiene una
+        percentuale (es. "Batteria scarica rilevata (12%)"), il replace
+        testuale lascerebbe nell'alert di risoluzione un valore
+        percentuale ormai obsoleto: va quindi sempre passato un testo
+        esplicito (vedi check_battery() piu' sotto).
+        """
         if is_faulty:
             self._fault_streaks[condition_name] = self._fault_streaks.get(condition_name, 0) + 1
             if (self._fault_streaks[condition_name] >= config.ALERT_FAULT_STREAK_THRESHOLD
@@ -92,9 +116,12 @@ class AlertManager:
             self._fault_streaks[condition_name] = 0
             if condition_name in self._active_alerts:
                 self._active_alerts.discard(condition_name)
+                testo_risolto = descrizione_risolto or (
+                    descrizione.replace("rilevato", "risolto") + " (RISOLTO)"
+                )
                 self._send(self._build_alert(
                     parametro,
-                    descrizione.replace("rilevato", "risolto") + " (RISOLTO)",
+                    testo_risolto,
                     "INFO",
                     patient_id,
                 ))
@@ -111,4 +138,11 @@ class AlertManager:
             f"Batteria scarica rilevata ({battery_pct:.0f}%)",
             gravita="WARNING",
             patient_id=patient_id,
+            # BUGFIX (Code Review): senza questo parametro esplicito, la
+            # risoluzione veniva generata con .replace("rilevato",
+            # "risolto") sulla stringa di sopra, lasciando nell'alert di
+            # risoluzione la percentuale ORMAI OBSOLETA letta al momento
+            # dell'allarme originale (es. "...risolta (12%)" anche se la
+            # batteria era poi tornata, per dire, al 100%).
+            descrizione_risolto="Batteria non piu' sotto soglia critica (RISOLTO)",
         )

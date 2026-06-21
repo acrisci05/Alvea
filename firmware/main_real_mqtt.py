@@ -9,6 +9,7 @@ from transport_mqtt import MQTTPublisher
 from sensor_ecg import ECGMonitor, SAMPLE_PERIOD_US
 from sensor_temp import TempSensor
 from sensor_ppg import PPGMonitor
+from sensor_battery import BatteryMonitor
 from alerts import AlertManager
 import ntp_time
 
@@ -97,6 +98,7 @@ alert_mgr = AlertManager(mqtt, transport_kind="mqtt")
 ecg = ECGMonitor()
 thermo = TempSensor()
 ppg = PPGMonitor()
+battery = BatteryMonitor()
 
 next_sample = time.ticks_us()
 last_pub = time.time()
@@ -196,6 +198,14 @@ while True:
             gravita="CRITICAL", patient_id=current_patient_id,
         )
 
+        # AGGIUNTA (Requisito 7 - "batteria bassa del dispositivo", uno
+        # degli esempi espliciti di condizione anomala nel documento dei
+        # requisiti). battery_pct e' None se il monitoraggio batteria e'
+        # disabilitato o l'hardware non e' disponibile: in tal caso
+        # check_battery() non genera alcun alert (vedi sensor_battery.py).
+        battery_pct = battery.read_percent()
+        alert_mgr.check_battery(battery_pct, patient_id=current_patient_id)
+
         # NOTA SUL FORMATO (Requisito 1 - "tipo di parametro misurato"):
         # qui inviamo un singolo record multi-parametro per timestamp (un
         # "campionamento" del paziente), non un record per parametro. E'
@@ -211,6 +221,7 @@ while True:
             "skin_temperature": float(final_temp),
             "spo2": float(spo2),
             "respiration_rate": float(resp_rate),
+            "battery_pct": float(battery_pct) if battery_pct is not None else None,
             "sensor_contact": (contact_ecg and contact_ppg),
             "device_status": status_string,
             "source": "production_firmware"

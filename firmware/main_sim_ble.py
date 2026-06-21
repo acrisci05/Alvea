@@ -68,6 +68,9 @@ while True:
             "sensor_contact", "Simulazione: caduta di contatto del sensore rilevata",
             gravita="WARNING", patient_id=current_patient_id,
         )
+
+        # AGGIUNTA (Requisito 7 - "batteria bassa del dispositivo")
+        alert_mgr.check_battery(reading["battery_pct"], patient_id=current_patient_id)
         
         if ble.is_connected():
             reading["device_status"] = "SYSTEM_OK" if current_patient_id else "WARN_PATIENT_NOT_ASSIGNED"

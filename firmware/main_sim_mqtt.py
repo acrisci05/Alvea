@@ -111,6 +111,11 @@ while True:
             gravita="WARNING", patient_id=current_patient_id,
         )
 
+        # AGGIUNTA (Requisito 7 - "batteria bassa del dispositivo"): la
+        # batteria simulata si scarica progressivamente (vedi sensor_sim.py),
+        # cosi' anche la pipeline simulata dimostra l'alert end-to-end.
+        alert_mgr.check_battery(reading["battery_pct"], patient_id=current_patient_id)
+
         # Inietta lo stato di rete nel pacchetto diagnostico
         if not mqtt.is_connected:
             reading["device_status"] = "WARN_NETWORK_DISCONNECTED"

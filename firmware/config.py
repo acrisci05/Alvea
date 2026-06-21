@@ -82,3 +82,13 @@ RESP_RATE_SIM_MIN = 20.0
 RESP_RATE_SIM_MAX = 30.0
 
 CONTACT_DROP_PROB = 0.05
+
+# --- SIMULAZIONE BATTERIA (Esclusivamente per il Test-Rig / Simulatore) ---
+# AGGIUNTA (Requisito 7 - "batteria bassa del dispositivo"): nella
+# pipeline simulata non esiste un ADC reale da leggere, quindi
+# sensor_sim.py simula una scarica lineare a partire da BATTERY_SIM_START,
+# di BATTERY_SIM_DRAIN_PER_TICK punti percentuali ad ogni read(), per
+# poter dimostrare in demo (senza attendere ore) il superamento della
+# soglia DEFAULT_ALARM_BATTERY_MIN_PCT e la generazione dell'alert.
+BATTERY_SIM_START = 100.0
+BATTERY_SIM_DRAIN_PER_TICK = 0.5

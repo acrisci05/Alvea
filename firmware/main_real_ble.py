@@ -20,6 +20,7 @@ from transport_ble import BLEPeripheral
 from sensor_ecg import ECGMonitor, SAMPLE_PERIOD_US
 from sensor_temp import TempSensor
 from sensor_ppg import PPGMonitor
+from sensor_battery import BatteryMonitor
 from alerts import AlertManager
 
 print("=== ASTHMAGUARD PRO: AVVIO ARCHITETTURA BLE (modalita' alternativa/demo) ===")
@@ -70,6 +71,7 @@ alert_mgr = AlertManager(ble, transport_kind="ble")
 ecg = ECGMonitor()
 thermo = TempSensor()
 ppg = PPGMonitor()
+battery = BatteryMonitor()
 
 # Variabili di Timing
 next_sample = time.ticks_us()
@@ -147,6 +149,10 @@ while True:
             gravita="CRITICAL", patient_id=current_patient_id,
         )
 
+        # AGGIUNTA (Requisito 7 - "batteria bassa del dispositivo")
+        battery_pct = battery.read_percent()
+        alert_mgr.check_battery(battery_pct, patient_id=current_patient_id)
+
         reading = {
             "device_id": config.DEVICE_ID,
             "patient_id": current_patient_id,
@@ -155,6 +161,7 @@ while True:
             "skin_temperature": float(final_temp),
             "spo2": float(spo2),
             "respiration_rate": float(resp_rate),
+            "battery_pct": float(battery_pct) if battery_pct is not None else None,
             "sensor_contact": (contact_ecg and contact_ppg),
             "device_status": status_string,
             "source": "production_ble"
