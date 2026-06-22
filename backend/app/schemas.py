@@ -1,118 +1,117 @@
 # schemas.py - Schemi Pydantic (v2) di richiesta/risposta.
 #
-# Pydantic è una libreria che definisce la "forma" dei dati in ingresso e uscita.
-# Ogni classe qui descrive come deve essere strutturato un dato:
-# - quali campi ci sono
-# - che tipo ha ogni campo
-# - quali sono obbligatori e quali opzionali
-#
-# FastAPI usa questi schemi per:
-# - validare automaticamente i dati in entrata (request body)
-# - serializzare i dati in uscita (response) in JSON
-# - generare la documentazione automatica su /docs
-
+# Ogni classe definisce la forma dei dati in ingresso (payload ricevuti)
+# o in uscita (response mandate all'app). Pydantic valida automaticamente
+# i tipi e genera errori HTTP 422 se il payload non è conforme.
 from datetime import datetime
-from typing import Optional       # per i campi che possono essere None
-from pydantic import BaseModel    # classe base da cui ereditano tutti gli schemi
+from typing import Optional
+from pydantic import BaseModel
 
 
-# =============================================================================
-# AUTH
-# =============================================================================
+# ===================== AUTH =====================
 
 class CaregiverCreate(BaseModel):
-    # Schema per la registrazione di un nuovo caregiver (POST /register).
-    # Entrambi i campi sono obbligatori: se mancano, FastAPI risponde 422.
+    """Dati richiesti per registrare un nuovo account caregiver."""
     username: str
-    password: str  # la password in chiaro: verrà hashata prima di salvarla nel DB
-
+    password: str
 
 class CaregiverResponse(BaseModel):
-    # Schema per la risposta dopo la registrazione o il login.
-    # Restituisce solo id e username: la password (anche hashata) non viene mai esposta.
+    """Dati restituiti dopo la registrazione o il login."""
     id: int
     username: str
-
     class Config:
-        # from_attributes=True permette di creare questo schema direttamente
-        # da un oggetto ORM (models.Caregiver) senza convertirlo manualmente a dict.
-        from_attributes = True
-
+        from_attributes = True  # permette la creazione da un ORM model SQLAlchemy
 
 class Token(BaseModel):
-    # Schema per il token JWT restituito dopo il login (POST /login).
+    """Token JWT restituito dopo il login."""
     access_token: str
-    token_type: str = "bearer"  # valore fisso: il tipo standard per JWT è "bearer"
+    token_type: str = "bearer"
 
 
-# =============================================================================
-# DEVICE
-# =============================================================================
+# ===================== DEVICE =====================
 
 class DeviceCreate(BaseModel):
-    # Schema per associare una cavigliera all'account (POST /devices).
-    device_id: str              # identificativo univoco della cavigliera (es. "ALVEA_04")
-    baby_name: Optional[str] = None  # nome del bambino, opzionale
-
+    """Payload per associare una cavigliera all'account caregiver."""
+    device_id: str          # es. "ALVEA_04" — identificativo univoco del firmware
+    baby_name: Optional[str] = None  # nome del bambino (opzionale, per l'UI)
 
 class DeviceResponse(BaseModel):
-    # Schema per la risposta con i dati di una cavigliera.
+    """Device restituito nelle liste e nei dettagli."""
     id: int
     device_id: str
     baby_name: Optional[str]
-    owner_id: int               # id del caregiver proprietario
-
+    owner_id: int
     class Config:
         from_attributes = True
 
 
-# =============================================================================
-# TELEMETRIA / LETTURE
-# =============================================================================
+# ===================== TELEMETRIA =====================
 
 class ReadingIn(BaseModel):
-    # Schema per il payload prodotto dall'ESP32 e ricevuto via MQTT.
-    # Viene usato in mqtt_ingest.py per validare ogni messaggio in arrivo.
-    # Se il payload non rispetta questo schema, il messaggio viene scartato.
-    device_id: str
-    timestamp: Optional[float] = None      # timestamp Unix dell'ESP32 (opzionale: usiamo quello del DB)
-    resp_rate: Optional[float] = None      # frequenza respiratoria in atti/min (può non essere ancora disponibile)
-    bpm: float                             # battito cardiaco in BPM (obbligatorio)
-    temperature: float                     # temperatura cutanea in °C (obbligatoria)
-    sensor_contact: bool                   # True = fascia a contatto, False = staccata
-    source: Optional[str] = None          # "sim" (simulatore) o "ad8232" (sensore reale)
+    """Payload JSON canonico prodotto dall'ESP32 (simulatore o sensore reale).
 
+    Tutti i campi corrispondono esattamente ai campi pubblicati dal firmware
+    su alvea/devices/<device_id>/telemetry. I campi Optional hanno None come
+    default perché il firmware può ometterli in alcune condizioni (es.
+    battery_pct=None se l'ADC della batteria è guasto).
+    """
+    device_id: str
+    patient_id: Optional[str] = None       # associazione paziente-dispositivo
+    timestamp: Optional[float] = None      # Unix epoch (secondi); se None si usa now()
+    bpm: float                             # frequenza cardiaca (BPM)
+    skin_temperature: float                # temperatura cutanea periferica (°C)
+    spo2: float                            # saturazione ossigeno periferico (%)
+    respiration_rate: float                # frequenza respiratoria (atti/min)
+    battery_pct: Optional[float] = None   # carica batteria (%); None se sensore guasto
+    sensor_contact: bool                   # True solo se ECG e PPG sono entrambi a contatto
+    device_status: Optional[str] = None   # es. "SYSTEM_OK", "ERR_ECG_LEADS_OFF"
+    source: Optional[str] = None          # "sim" | "production_firmware"
 
 class ReadingResponse(BaseModel):
-    # Schema per la risposta degli endpoint GET /devices/{id}/readings e /latest.
-    # Aggiunge i campi generati dal DB (id e ts) che non erano nel payload originale.
+    """Lettura restituita dagli endpoint REST e dal canale realtime.
+
+    Espone tutti i parametri vitali in modo che l'app possa visualizzarli
+    senza dover fare ulteriori chiamate.
+    """
     id: int
     device_id: str
-    ts: datetime                           # timestamp assegnato dal DB al momento del salvataggio
-    resp_rate: Optional[float]             # frequenza respiratoria (può essere None)
+    patient_id: Optional[str]
+    ts: datetime                           # timestamp salvato nel DB (UTC)
     bpm: float
-    temperature: float
+    skin_temperature: float
+    spo2: float
+    respiration_rate: float
+    battery_pct: Optional[float]
     sensor_contact: bool
+    device_status: Optional[str]
     source: Optional[str]
-
     class Config:
         from_attributes = True
 
 
-# =============================================================================
-# ALERT
-# =============================================================================
+# ===================== ALERT =====================
 
 class AlertResponse(BaseModel):
-    # Schema per la risposta dell'endpoint GET /devices/{id}/alerts.
-    # Rappresenta un singolo allarme generato dalla valutazione delle soglie.
+    """Allarme clinico o tecnico restituito dagli endpoint REST."""
     id: int
     device_id: str
-    ts: datetime                # quando è stato generato l'alert
-    kind: str                   # tipo: "bpm_low", "resp_high", "contact_lost", ...
-    severity: str               # gravità: "warning", "critical", "technical"
-    message: str                # testo leggibile (es. "Bradicardia critica: 55 BPM")
-    value: Optional[float]      # valore numerico che ha scatenato l'alert (None per alert tecnici)
-
+    ts: datetime
+    kind: str       # es. "bpm_high", "spo2_low", "resp_low", "contact_lost"
+    severity: str   # "warning" | "critical" | "technical"
+    message: str    # messaggio leggibile
+    value: Optional[float]  # valore che ha scatenato l'allarme
     class Config:
         from_attributes = True
+
+
+# ===================== COMANDI DEVICE =====================
+
+class DeviceCommand(BaseModel):
+    """Payload per inviare un comando di configurazione alla cavigliera.
+
+    Il backend pubblica questo JSON sul topic MQTT
+    alvea/devices/<device_id>/commands, che il firmware ascolta per
+    aggiornare la propria configurazione senza riavvio.
+    """
+    publish_period_s: Optional[int] = None   # nuova frequenza di invio (secondi)
+    patient_id: Optional[str] = None         # associa/disassocia il paziente
