@@ -167,6 +167,13 @@ while True:
             gravita="CRITICAL", patient_id=current_patient_id,
         )
 
+        # Alert clinici basati su soglie (Punto 2 dei requisiti: "valore
+        # fuori soglia"). Verificati solo se il PPG e' a contatto, altrimenti
+        # spo2/resp_rate sono 0.0 per costruzione e non vanno interpretati
+        # come valori fisiologici.
+        alert_mgr.check_spo2(spo2, patient_id=current_patient_id)
+        alert_mgr.check_resp_rate(resp_rate, patient_id=current_patient_id)
+
         battery_pct = battery.read_percent()
         alert_mgr.check_battery(battery_pct, patient_id=current_patient_id)
 

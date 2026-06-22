@@ -1,7 +1,9 @@
 # alerts.py - Generazione e invio di alert locali rilevati dal device.
 #
-# Questo modulo ha il compito di generare alert di tipo "device/hardware", con un formato dati
-# compatibile con quanto richiesto
+# Questo modulo ha il compito di generare alert sia di tipo "device/hardware"
+# (guasti/assenza di contatto dei sensori, batteria scarica) sia alert
+# clinici basati su soglia (SpO2, frequenza respiratoria), con un formato
+# dati compatibile con quanto richiesto
 
 import time
 import json
@@ -68,21 +70,29 @@ class AlertManager:
             self._fault_streaks[condition_name] = self._fault_streaks.get(condition_name, 0) + 1
             if (self._fault_streaks[condition_name] >= config.ALERT_FAULT_STREAK_THRESHOLD
                     and condition_name not in self._active_alerts):
-                self._active_alerts.add(condition_name)
-                self._send(self._build_alert(parametro, descrizione, gravita, patient_id))
+                # Segniamo la condizione come "attiva" solo se l'invio e' andato
+                # a buon fine: se la rete/BLE non e' disponibile in questo
+                # momento, _send() ritorna False e al prossimo ciclo di
+                # telemetria ci riproveremo, invece di considerare l'alert
+                # gia' notificato senza che sia mai arrivato a destinazione.
+                if self._send(self._build_alert(parametro, descrizione, gravita, patient_id)):
+                    self._active_alerts.add(condition_name)
         else:
             self._fault_streaks[condition_name] = 0
             if condition_name in self._active_alerts:
-                self._active_alerts.discard(condition_name)
                 testo_risolto = descrizione_risolto or (
                     descrizione.replace("rilevato", "risolto") + " (RISOLTO)"
                 )
-                self._send(self._build_alert(
+                # Stesso discorso del ramo "guasto": rimuoviamo la condizione
+                # da _active_alerts solo se siamo riusciti a notificare la
+                # risoluzione, altrimenti ci riproveremo al prossimo ciclo.
+                if self._send(self._build_alert(
                     parametro,
                     testo_risolto,
                     "INFO",
                     patient_id,
-                ))
+                )):
+                    self._active_alerts.discard(condition_name)
 
     def check_battery(self, battery_pct, patient_id=None):
         """Da chiamare se/quando e' disponibile una lettura di batteria."""
@@ -97,4 +107,40 @@ class AlertManager:
             gravita="WARNING",
             patient_id=patient_id,
             descrizione_risolto="Batteria non piu' sotto soglia critica (RISOLTO)",
+        )
+
+    def check_spo2(self, spo2, patient_id=None):
+        """Alert clinico: saturazione sotto la soglia configurata (Asma).
+        Da chiamare solo quando il sensore PPG e' realmente a contatto con
+        la pelle (spo2 == 0.0 indica buffer in riempimento/assenza di
+        contatto, non un valore fisiologico da allarmare)."""
+        if spo2 is None or spo2 <= 0.0:
+            return
+        is_low = spo2 < config.DEFAULT_ALARM_SPO2_MIN
+        self.check_fault(
+            "spo2_low",
+            is_low,
+            "spo2",
+            f"Saturazione SpO2 sotto soglia rilevata ({spo2:.1f}%)",
+            gravita="CRITICAL",
+            patient_id=patient_id,
+            descrizione_risolto="Saturazione SpO2 rientrata nella soglia (RISOLTO)",
+        )
+
+    def check_resp_rate(self, resp_rate, patient_id=None):
+        """Alert clinico: tachipnea, frequenza respiratoria sopra la
+        soglia configurata (Asma pediatrico). Da chiamare solo quando il
+        sensore PPG e' a contatto con la pelle (resp_rate == 0.0 indica
+        buffer in riempimento/assenza di contatto)."""
+        if resp_rate is None or resp_rate <= 0.0:
+            return
+        is_high = resp_rate > config.DEFAULT_ALARM_RESP_MAX
+        self.check_fault(
+            "resp_rate_high",
+            is_high,
+            "respiration_rate",
+            f"Tachipnea rilevata, frequenza respiratoria elevata ({resp_rate:.1f} atti/min)",
+            gravita="CRITICAL",
+            patient_id=patient_id,
+            descrizione_risolto="Frequenza respiratoria rientrata nella soglia (RISOLTO)",
         )
