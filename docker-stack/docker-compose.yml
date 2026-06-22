@@ -1,65 +1,89 @@
-# PulseGuard-Baby - stack completo
-# ESP32 --MQTT--> Mosquitto --> Node-RED --> InfluxDB --> Grafana
-#                          \--> Backend FastAPI --> SQLite + WebSocket/SSE --> App
+# docker-compose.yml — Stack completo Alvea
+#
+# Architettura:
+#   ESP32 --MQTT--> Mosquitto --+--> Node-RED --> InfluxDB <-- Grafana
+#                               |                              (dashboard medico)
+#                               \--> Backend FastAPI --> SQLite
+#                                        |
+#                                    WebSocket/REST
+#                                        |
+#                                    App mobile (caregiver)
+#
+# Avvio: docker compose up -d
+# Variabili configurabili nel file .env (vedi .env.example)
+
 services:
 
+  # --- Broker MQTT ---------------------------------------------------------
+  # Mosquitto riceve la telemetria dal firmware ESP32 e la distribuisce
+  # a Node-RED e al backend FastAPI tramite pub/sub.
   mosquitto:
     image: eclipse-mosquitto:2
-    container_name: pulseguard_mosquitto
+    container_name: alvea_mosquitto
     restart: unless-stopped
     ports:
-      - "1883:1883"   # MQTT
-      - "9001:9001"   # MQTT over WebSocket
+      - "1883:1883"   # MQTT standard (ESP32, Node-RED, backend)
+      - "9001:9001"   # MQTT over WebSocket (client browser opzionale)
     volumes:
       - ./mosquitto/config:/mosquitto/config
       - ./mosquitto/data:/mosquitto/data
       - ./mosquitto/log:/mosquitto/log
 
+  # --- Database serie temporali --------------------------------------------
+  # InfluxDB v2 salva tutte le letture storiche scritte da Node-RED.
+  # Grafana lo interroga per costruire i grafici della dashboard medico.
   influxdb:
     image: influxdb:2.7
-    container_name: pulseguard_influxdb
+    container_name: alvea_influxdb
     restart: unless-stopped
     ports:
       - "8086:8086"
     environment:
-      DOCKER_INFLUXDB_INIT_MODE: setup
-      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUX_USERNAME:-admin}
-      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUX_PASSWORD:-pulseguard123}
-      DOCKER_INFLUXDB_INIT_ORG: ${INFLUX_ORG:-pulseguard}
-      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUX_BUCKET:-vitals}
-      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUX_ADMIN_TOKEN:-pulseguard-admin-token}
+      DOCKER_INFLUXDB_INIT_MODE:         setup
+      DOCKER_INFLUXDB_INIT_USERNAME:     ${INFLUX_USERNAME:-admin}
+      DOCKER_INFLUXDB_INIT_PASSWORD:     ${INFLUX_PASSWORD:-alvea123}
+      DOCKER_INFLUXDB_INIT_ORG:          ${INFLUX_ORG:-alvea}
+      DOCKER_INFLUXDB_INIT_BUCKET:       ${INFLUX_BUCKET:-vitals}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN:  ${INFLUX_ADMIN_TOKEN:-alvea-admin-token}
     volumes:
       - influxdb_data:/var/lib/influxdb2
 
+  # --- Pipeline dati IoT (Node-RED) ----------------------------------------
+  # Node-RED sottoscrive alvea/devices/+/telemetry, valuta le soglie cliniche,
+  # scrive le serie temporali su InfluxDB e ripubblica gli alert su MQTT.
+  # Il flow è definito in nodered/data/flows.json (caricato automaticamente).
   nodered:
     image: nodered/node-red:latest
-    container_name: pulseguard_nodered
+    container_name: alvea_nodered
     restart: unless-stopped
     ports:
-      - "1880:1880"
+      - "1880:1880"   # editor visuale Node-RED (http://localhost:1880)
     environment:
-      INFLUX_URL: http://influxdb:8086
-      INFLUX_ORG: ${INFLUX_ORG:-pulseguard}
+      # Passate al flow tramite env.get() nel nodo function
+      INFLUX_URL:    http://influxdb:8086
+      INFLUX_ORG:    ${INFLUX_ORG:-alvea}
       INFLUX_BUCKET: ${INFLUX_BUCKET:-vitals}
-      INFLUX_TOKEN: ${INFLUX_ADMIN_TOKEN:-pulseguard-admin-token}
+      INFLUX_TOKEN:  ${INFLUX_ADMIN_TOKEN:-alvea-admin-token}
     volumes:
-      - ./nodered/data:/data
+      - ./nodered/data:/data   # contiene flows.json
     depends_on:
       - mosquitto
       - influxdb
 
+  # --- Dashboard medico (Grafana) ------------------------------------------
+  # Grafana espone la dashboard provisionata automaticamente da
+  # grafana/provisioning/. Usa InfluxDB come datasource.
   grafana:
     image: grafana/grafana:latest
-    container_name: pulseguard_grafana
+    container_name: alvea_grafana
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3000:3000"   # dashboard (http://localhost:3000, admin/admin)
     environment:
-      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_USER:     admin
       GF_SECURITY_ADMIN_PASSWORD: admin
-      # passiamo il token Influx alla datasource provisionata
-      INFLUX_TOKEN: ${INFLUX_ADMIN_TOKEN:-pulseguard-admin-token}
-      INFLUX_ORG: ${INFLUX_ORG:-pulseguard}
+      INFLUX_TOKEN:  ${INFLUX_ADMIN_TOKEN:-alvea-admin-token}
+      INFLUX_ORG:    ${INFLUX_ORG:-alvea}
       INFLUX_BUCKET: ${INFLUX_BUCKET:-vitals}
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning
@@ -67,23 +91,31 @@ services:
     depends_on:
       - influxdb
 
+  # --- Backend applicativo (FastAPI) ---------------------------------------
+  # FastAPI gestisce autenticazione JWT, REST API, WebSocket e SSE.
+  # Salva le letture su SQLite (percorso canale app mobile).
+  # Legge la telemetria direttamente da MQTT (indipendente da Node-RED).
+  # La scrittura su InfluxDB dal backend è opzionale e disabilitata di
+  # default: Node-RED è il percorso canonico per InfluxDB.
   backend:
     build: ../backend
-    container_name: pulseguard_backend
+    container_name: alvea_backend
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "8000:8000"   # REST API e WebSocket (http://localhost:8000)
     environment:
-      MQTT_HOST: mosquitto
-      MQTT_PORT: 1883
-      TOPIC_DATA: pulseguard/baby/data
-      SECRET_KEY: ${SECRET_KEY:-dev_secret}
-      # InfluxDB dal backend e' OPZIONALE (Node-RED e' il percorso canonico)
+      MQTT_HOST:   mosquitto
+      MQTT_PORT:   1883
+      # Topic allineato al firmware: alvea/devices/+/telemetry
+      TOPIC_DATA:  alvea/devices/+/telemetry
+      TOPIC_ALERT: alvea/devices/+/alerts
+      SECRET_KEY:  ${SECRET_KEY:-dev_secret_cambiami}
+      # InfluxDB dal backend: disabilitato (Node-RED è il percorso canonico)
       INFLUX_ENABLED: "false"
-      INFLUX_URL: http://influxdb:8086
-      INFLUX_ORG: ${INFLUX_ORG:-pulseguard}
+      INFLUX_URL:    http://influxdb:8086
+      INFLUX_ORG:    ${INFLUX_ORG:-alvea}
       INFLUX_BUCKET: ${INFLUX_BUCKET:-vitals}
-      INFLUX_TOKEN: ${INFLUX_ADMIN_TOKEN:-pulseguard-admin-token}
+      INFLUX_TOKEN:  ${INFLUX_ADMIN_TOKEN:-alvea-admin-token}
     depends_on:
       - mosquitto
 
