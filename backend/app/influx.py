@@ -1,84 +1,88 @@
-# influx.py - Scrittura opzionale su InfluxDB dal backend.
+# influx.py - Scrittura opzionale su InfluxDB dal backend FastAPI.
 #
-# NOTA ARCHITETTURALE: nel nostro stack il percorso canonico verso InfluxDB è
-# Node-RED (ESP32 → MQTT → Node-RED → InfluxDB → Grafana). Il backend scrive
-# su Influx solo se INFLUX_ENABLED=true, utile se vuoi bypassare Node-RED.
-# Import "pigro" così il backend gira anche senza la libreria installata.
-
-# Importa la configurazione: URL, token, org, bucket e il flag di abilitazione
+# NOTA ARCHITETTURALE: il percorso canonico verso InfluxDB è Node-RED
+# (ESP32 → MQTT → Node-RED → InfluxDB → Grafana). Questo modulo scrive
+# su InfluxDB direttamente dal backend solo se INFLUX_ENABLED=true nel .env,
+# utile se si vuole bypassare Node-RED (es. in test senza docker-compose).
+# Di default è disabilitato per evitare scritture doppie.
+#
+# Import "pigro" (_get_writer inizializzato al primo uso): il backend
+# si avvia correttamente anche se la libreria influxdb-client non è
+# installata o InfluxDB non è raggiungibile.
+from datetime import datetime, timezone
 from . import config
 
-# Variabile globale che tiene in memoria il write_api una volta creato.
-# Inizialmente è None: verrà inizializzata solo alla prima scrittura.
-# Questo pattern si chiama "lazy initialization" (inizializzazione pigra):
-# non si crea la connessione finché non serve davvero.
 _write_api = None
 
 
 def _get_writer():
-    # Restituisce il writer di InfluxDB, creandolo se non esiste ancora.
-    # Usando "global" diciamo a Python che vogliamo modificare la variabile
-    # globale _write_api, non crearne una locale.
+    """Inizializza il client InfluxDB al primo utilizzo (lazy init)."""
     global _write_api
-
-    # Se il writer esiste già, lo restituisce subito senza ricreare la connessione
     if _write_api is not None:
         return _write_api
-
-    # Importa la libreria InfluxDB solo qui, non in cima al file.
-    # Così se la libreria non è installata, il backend parte lo stesso
-    # finché INFLUX_ENABLED=false (che è il default).
     from influxdb_client import InfluxDBClient
     from influxdb_client.client.write_api import SYNCHRONOUS
-
-    # Crea il client InfluxDB con le credenziali da config.py
     client = InfluxDBClient(
         url=config.INFLUX_URL,
         token=config.INFLUX_TOKEN,
         org=config.INFLUX_ORG
     )
-
-    # Crea il write_api in modalità SYNCHRONOUS: aspetta la conferma di scrittura
-    # prima di andare avanti. Più sicuro per un prototipo didattico.
     _write_api = client.write_api(write_options=SYNCHRONOUS)
     return _write_api
 
 
 def write_reading(reading: dict):
-    # Scrive una lettura su InfluxDB.
-    # Viene chiamata da mqtt_ingest.py per ogni messaggio ricevuto dall'ESP32.
+    """Scrive una lettura su InfluxDB come punto nella measurement 'vitals'.
 
-    # Se INFLUX_ENABLED=false (default), esce subito senza fare nulla.
-    # In questo caso i dati vanno su InfluxDB tramite Node-RED, non da qui.
+    I tag (device_id, patient_id, source) sono indicizzati e usati da Grafana
+    per filtrare per paziente o device. I field sono i valori numerici delle
+    serie temporali su cui si calcolano medie, min, max.
+
+    Parametri
+    ----------
+    reading : dict
+        Dizionario con i campi del payload firmware (da ReadingIn.model_dump()).
+    """
     if not config.INFLUX_ENABLED:
-        return
+        return  # percorso Node-RED è quello canonico; non scrivere due volte
 
     try:
-        # Importa Point: è il formato dati di InfluxDB (simile a un record con tag e campi)
         from influxdb_client import Point
-
         writer = _get_writer()
 
-        # Costruisce il "point" da scrivere su InfluxDB.
-        # Un point è composto da:
-        # - measurement: nome della "tabella" (qui "vitals")
-        # - tag: metadati indicizzati usati per filtrare (device_id, source)
-        # - field: valori numerici effettivi da storicizzare (bpm, temp, contact)
+        # Converti il timestamp Unix del firmware in datetime UTC.
+        # Se il firmware non lo manda, usa l'ora corrente del server.
+        ts_unix = reading.get("timestamp")
+        if ts_unix:
+            ts = datetime.fromtimestamp(ts_unix, tz=timezone.utc)
+        else:
+            ts = datetime.now(tz=timezone.utc)
+
         p = (
             Point("vitals")
-            .tag("device_id", reading["device_id"])         # es. "ALVEA_04"
-            .tag("source", reading.get("source", "unknown")) # "sim" o "ad8232"
-            .field("bpm", float(reading.get("bpm", 0)))
-            .field("temperature", float(reading.get("temperature", 0)))
-            # sensor_contact è booleano ma InfluxDB vuole un numero: 1=contatto, 0=staccato
-            .field("sensor_contact", 1 if reading.get("sensor_contact") else 0)
+            # --- Tag: indicizzati, usati per filtrare in Grafana ---
+            .tag("device_id", reading["device_id"])
+            .tag("source",    reading.get("source", "unknown"))
+
+            # patient_id può essere None se il paziente non è ancora assegnato
+            .tag("patient_id", reading.get("patient_id") or "unassigned")
+
+            # --- Field: valori numerici delle serie temporali ---
+            .field("bpm",              float(reading.get("bpm") or 0))
+            .field("skin_temperature", float(reading.get("skin_temperature") or 0))
+            .field("spo2",             float(reading.get("spo2") or 0))
+            .field("respiration_rate", float(reading.get("respiration_rate") or 0))
+            .field("sensor_contact",   1 if reading.get("sensor_contact") else 0)
+
+            # battery_pct può essere None se l'ADC della batteria è guasto
+            .field("battery_pct", float(reading.get("battery_pct") or -1))
+
+            # Timestamp esplicito: usa quello del firmware, non quello di arrivo
+            .time(ts)
         )
 
-        # Scrive il point nel bucket configurato
         writer.write(bucket=config.INFLUX_BUCKET, record=p)
 
     except Exception as e:
-        # Se la scrittura fallisce (es. InfluxDB non raggiungibile) logga l'errore
-        # ma NON blocca il flusso: il dato è già salvato nel DB SQLite,
-        # InfluxDB è solo uno strato aggiuntivo per Grafana.
-        print("[influx] scrittura fallita:", e)
+        # Errore non bloccante: il dato è già salvato su SQLite
+        print(f"[influx] scrittura fallita: {e}")

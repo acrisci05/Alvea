@@ -3,6 +3,7 @@
 # Questo file contiene tutte le funzioni che leggono e scrivono sul DB.
 # Gli endpoint in main.py non toccano mai il DB direttamente: delegano
 # sempre a queste funzioni. Questo separa la logica HTTP dalla logica dati.
+from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import desc
@@ -84,10 +85,23 @@ async def save_reading(db: AsyncSession, r: dict):
 
     Il dizionario 'r' viene da ReadingIn.model_dump() in mqtt_ingest.py
     e contiene tutti i parametri vitali inviati dal firmware.
+
+    Il timestamp Unix del firmware (campo 'timestamp', float) viene convertito
+    in datetime UTC. Se il firmware non lo manda, si usa l'ora corrente del server.
+    Questo garantisce che il campo 'ts' nel DB rifletta sempre il momento reale
+    di acquisizione del dato, non quello di arrivo al backend.
     """
+    # Converti il timestamp Unix del firmware in datetime UTC
+    ts_unix = r.get("timestamp")
+    if ts_unix:
+        ts = datetime.fromtimestamp(ts_unix, tz=timezone.utc).replace(tzinfo=None)
+    else:
+        ts = datetime.utcnow()
+
     reading = models.Reading(
         device_id        = r["device_id"],
         patient_id       = r.get("patient_id"),       # può essere None se non assegnato
+        ts               = ts,                         # timestamp reale del firmware
         bpm              = r.get("bpm"),
         skin_temperature = r.get("skin_temperature"),  # nome allineato al firmware
         spo2             = r.get("spo2"),
