@@ -3,10 +3,10 @@
 # Questo file contiene tutte le funzioni che leggono e scrivono sul DB.
 # Gli endpoint in main.py non toccano mai il DB direttamente: delegano
 # sempre a queste funzioni. Questo separa la logica HTTP dalla logica dati.
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import desc
+from sqlalchemy import desc, func
 
 from . import models, schemas, auth
 
@@ -144,6 +144,64 @@ async def get_latest_reading(db: AsyncSession, device_id: str):
         .limit(1)
     )
     return res.scalars().first()
+
+
+# ===================== STATISTICHE (avg, min, max) =======================
+
+# Parametri vitali su cui ha senso calcolare statistiche
+STAT_FIELDS = {
+    "bpm":              models.Reading.bpm,
+    "spo2":             models.Reading.spo2,
+    "respiration_rate": models.Reading.respiration_rate,
+    "skin_temperature": models.Reading.skin_temperature,
+    "battery_pct":      models.Reading.battery_pct,
+}
+
+async def get_stats(db: AsyncSession, device_id: str, hours: int = 24) -> dict:
+    """Calcola media, minimo e massimo di ogni parametro vitale nell'ultimo
+    intervallo temporale specificato (default: ultime 24 ore).
+
+    Usata da GET /devices/{id}/stats per mostrare nell'app i valori aggregati
+    del giorno: "SpO2 media 97%, min 94%, max 99%".
+
+    Parametri
+    ----------
+    device_id : str
+        Identificativo del device (es. "ALVEA_04").
+    hours : int
+        Finestra temporale in ore da adesso a ritroso (default 24).
+
+    Ritorna
+    -------
+    dict
+        Per ogni parametro vitale: avg, min, max e il numero di letture
+        usate per il calcolo (count). Valori None se non ci sono letture
+        nel periodo.
+    """
+    since = datetime.utcnow() - timedelta(hours=hours)
+    stats = {}
+
+    for field_name, column in STAT_FIELDS.items():
+        res = await db.execute(
+            select(
+                func.avg(column).label("avg"),   # media
+                func.min(column).label("min"),   # minimo
+                func.max(column).label("max"),   # massimo
+                func.count(column).label("count") # numero letture valide
+            )
+            .where(models.Reading.device_id == device_id)
+            .where(models.Reading.ts >= since)   # filtra per finestra temporale
+            .where(column.isnot(None))           # esclude i valori None (es. battery_pct guasto)
+        )
+        row = res.first()
+        stats[field_name] = {
+            "avg":   round(row.avg, 2) if row.avg is not None else None,
+            "min":   round(row.min, 2) if row.min is not None else None,
+            "max":   round(row.max, 2) if row.max is not None else None,
+            "count": row.count,
+        }
+
+    return {"device_id": device_id, "hours": hours, "stats": stats}
 
 
 # ===================== ALERT =====================

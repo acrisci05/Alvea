@@ -163,6 +163,32 @@ async def device_latest(device_id: str,
     return r
 
 
+@app.get("/devices/{device_id}/stats")
+async def device_stats(device_id: str, hours: int = 24,
+                       db: AsyncSession = Depends(get_db),
+                       user: models.Caregiver = Depends(get_current_user)):
+    """Restituisce le statistiche aggregate (media, min, max) dei parametri vitali.
+
+    Il parametro `hours` definisce la finestra temporale da adesso a ritroso
+    (default 24 ore). Utile per mostrare nell'app un riepilogo giornaliero
+    del tipo "SpO2 media 97%, min 94%, max 99%".
+
+    Esempio di risposta:
+    {
+      "device_id": "ALVEA_04",
+      "hours": 24,
+      "stats": {
+        "bpm":              {"avg": 98.4, "min": 72.0, "max": 145.0, "count": 86400},
+        "spo2":             {"avg": 97.1, "min": 94.0, "max": 99.0,  "count": 86400},
+        "respiration_rate": {"avg": 22.3, "min": 14.0, "max": 38.0,  "count": 86400},
+        "skin_temperature": {"avg": 36.8, "min": 36.1, "max": 37.9,  "count": 86400},
+        "battery_pct":      {"avg": 61.2, "min": 20.0, "max": 84.5,  "count": 86400}
+      }
+    }
+    """
+    return await crud.get_stats(db, device_id, hours=hours)
+
+
 @app.get("/devices/{device_id}/alerts", response_model=list[schemas.AlertResponse])
 async def device_alerts(device_id: str, limit: int = 50,
                         db: AsyncSession = Depends(get_db),
