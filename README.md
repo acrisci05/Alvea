@@ -1,20 +1,20 @@
 # Alvea
- 
+
 Dispositivo indossabile da caviglia **didattico** per il monitoraggio dell'**asma pediatrico** (EDR, battito cardiaco, temperatura cutanea), 
 con rilevamento dell'aderenza del sensore.
 Progetto per *Academy Medical Wearable Devices*.
- 
+
 > ⚠️ **Dispositivo didattico, non medico.** Non usare per decisioni sanitarie
 > reali. Vedi [`docs/SICUREZZA.md`](docs/SICUREZZA.md).
- 
- 
+
+
 # Cosa fa
- 
-L'ESP32 acquisisce i parametri (sensori reali PPG **a luce verde**, ECG **AD8232**, termistore **NTC di precisione**) e li invia **a 1 Hz**. Il sistema è bidirezionale: l'hardware ascolta 
+
+L'ESP32 acquisisce i parametri (sensori reali ECG **AD8232**, termistore **NTC di precisione**) e li invia **a 1 Hz**. Il sistema è bidirezionale: l'hardware ascolta 
 il backend per ricevere configurazioni remote (es. frequenza di campionamento). Due percorsi 
 paralleli condividono **lo stesso payload JSON**, così passare da simulatore a sensore reale non 
 cambia nulla a valle:
- 
+
 ```mermaid
 flowchart LR
     FW[ESP32<br/>sim o reale] -- "MQTT alvea/devices/{ID}/telemetry" --> MQ[(Mosquitto)]
@@ -24,14 +24,14 @@ flowchart LR
     MQ --> BE[Backend FastAPI] --> SQL[(SQLite)]
     BE -- "WebSocket / SSE" --> APP
 ```
- 
+
 ## Payload canonico
 ## JSON
 { "device_id": "ALVEA_ASTHMA_ANKLE_01", "timestamp": 1733740000.0,
   "bpm": 95.0, "skin_temperature": 32.5, "respiration_rate": 22.0, 
   "sensor_contact": true, "device_status": "SYSTEM_OK", "source": "production_firmware" }
- 
- 
+
+
 ## Struttura del repository
 ```Alvea/
 ├── firmware/        # MicroPython ESP32: RingBuffer ECG, Filtro IIR EDR, MQTT Async
@@ -41,7 +41,7 @@ flowchart LR
 ├── scripts/         # publish_test.py: HIL Testing e simulazione periferica
 └── docs/            # Fase 2/3: requisiti, use case, E-R, sequence, architettura
 ```
- 
+
 ## Avvio rapido (stack server)
 Richiede Docker e Docker Compose.
 ```
@@ -49,7 +49,7 @@ cd docker-stack
 cp .env.example .env        # opzionale: già pronto per uso locale
 docker compose up -d
 ```
- 
+
 Servizi disponibili:
 | Servizio | URL | Credenziali |
 |---|---|---|
@@ -58,10 +58,10 @@ Servizi disponibili:
 | InfluxDB (serie temporali) | http://localhost:8086 | admin / alvea123 |
 | Backend API (docs) | http://localhost:8000/docs | — |
 | MQTT Broker | localhost:1883 | anonimo |
- 
+
 La dashboard Grafana Alvea e il flow Node-RED sono già
 provisionati automaticamente.
- 
+
 # Prova senza Hardware
 ```
 pip install paho-mqtt
@@ -69,48 +69,52 @@ python scripts/publish_test.py --host localhost            # dati nominali
 python scripts/publish_test.py --host localhost --scenario asthma_attack   # test allarme
 ```
 Apri Grafana: i grafici storici e gli alert si popolano in tempo reale.
- 
- 
+
+
 ## Firmware ESP32 (MicroPython)
- 
+
 # Cablaggio sensori reali:
 1. Copia firmware/secrets_example.py in firmware/secrets.py e inserisci
 SSID/password del Wi-Fi.
+
 2. In firmware/config.py imposta MQTT_BROKER con l'IP del PC che ospita
 lo stack.
+
 3. Copia su scheda tutti i file di firmware/ e rinomina uno degli
 entrypoint in main.py:
+
 | Scenario | File da usare come `main.py` |
 |---|---|
 | Simulatore Test-Rig via MQTT | `main_sim_mqtt.py` |
 | Hardware Reale via MQTT (Prod) | `main_real_mqtt.py` |
 | Simulatore Test-Rig via BLE | `main_sim_ble.py` |
 | Hardware Reale via BLE | `main_real_ble.py` |
- 
- 
-<li>PPG (luce verde): S→GPIO4 </li>
+
+
 <li>ECG (AD8232): OUTPUT→GPIO34, LO+→GPIO32, LO-→GPIO33 </li>
 <li>Temp (termistore NTC): DATA→GPIO35 </li>
-L'estrazione clinica utilizza la tecnica EDR (ECG-Derived Respiration): un Filtro IIR Passa-Basso applicato alla sequenza degli intervalli RR isola la modulazione respiratoria del battito cardiaco (Aritmia Sinusale Respiratoria), da cui si stima la frequenza respiratoria senza richiedere un sensore ottico dedicato; lo stesso algoritmo Pan-Tompkins (derivata² + soglia adattiva + refrattario a buffer statico) impiegato per il BPM fornisce gli intervalli RR di partenza. Il canale PPG a luce verde resta attivo come stima ridondante del battito e per il rilevamento dell'aderenza cutanea del sensore.
- 
- 
+
+L'estrazione clinica utilizza la tecnica EDR (ECG-Derived Respiration): un Filtro IIR Passa-Basso applicato alla sequenza degli intervalli RR isola la modulazione respiratoria del battito cardiaco (Aritmia Sinusale Respiratoria), da cui si stima la frequenza respiratoria senza richiedere alcun sensore ottico dedicato; lo stesso algoritmo Pan-Tompkins (derivata² + soglia adattiva + refrattario a buffer statico) impiegato per il BPM fornisce gli intervalli RR di partenza. L'ECG è l'unico sensore biomedicale del dispositivo: il rilevamento dell'aderenza cutanea si basa sui soli pin leads-off dell'AD8232 (GPIO32/33).
+
+
 ## App mobile
 ```
 cd mobile && npm install && npx expo start
 ```
 Impostare API_URL in mobile/src/config.js con l'IP del PC. Dettagli in
 mobile/README.md.
- 
+
 ## Documentazione (Fase 2 / Fase 3)
- 
+
 * 📄 **[Relazione tecnica completa (PDF)](docs/RELAZIONE.pdf)** — sorgente LaTeX: [`docs/RELAZIONE.tex`](docs/RELAZIONE.tex)
 * [Analisi dei requisiti (RQ-XX)](docs/01-analisi-requisiti.md)
 * [Casi d'uso](docs/02-use-case.md)
 * [Schema E-R](docs/03-er-schema.md)
 * [Diagrammi di sequenza](docs/04-sequence.md)
 * [Architettura e API](docs/05-architettura.md)
+
 ## Pubblicare su GitHub
- 
+
 ```bash
 cd Alvea
 git init
@@ -120,6 +124,6 @@ git branch -M main
 git remote add origin https://github.com/TUO_UTENTE/Alvea.git
 git push -u origin main
 ```
- 
+
 ## Licenza
 MIT — vedi LICENSE. Progetto didattico accademico.
