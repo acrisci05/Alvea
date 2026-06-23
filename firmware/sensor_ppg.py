@@ -114,7 +114,7 @@ class PPGMonitor:
         self._i += 1
 
     def compute_bpm(self):
-    """Stima il BPM dai picchi rilevati sul canale verde nella finestra corrente. Ritorna 0 se la stima non e' affidabile"""
+        """Stima il BPM dai picchi rilevati sul canale verde nella finestra corrente. Ritorna 0 se la stima non e' affidabile"""
         n = self._peak_count
         if n < 3:
             return 0
