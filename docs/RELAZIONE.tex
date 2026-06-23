@@ -85,12 +85,11 @@ I dati biomedici grezzi vengono acquisiti da un \textbf{Edge Node basato su ESP3
 
 \subsection{Parametri biomedicali misurati}
 \begin{itemize}[leftmargin=1.3em,itemsep=2pt]
-  \item \textbf{Saturazione di Ossigeno (SpO2)} -- indicatore primario per valutare l'ipossia causata da broncocostrizione, calcolata dal rapporto AC/DC delle componenti Rosso/Infrarosso del segnale PPG (Ratio of Ratios).
-  \item \textbf{Frequenza Respiratoria (Atti/min)} -- estratta dal canale infrarosso del segnale fotopletismografico (PPG) tramite un filtro IIR passa-basso che isola la componente respiratoria lenta dalla pulsazione cardiaca sovrapposta, per identificare tachipnea da sforzo respiratorio.
+  \item \textbf{Frequenza Respiratoria (Atti/min)} -- stimata tramite la tecnica EDR (\emph{ECG-Derived Respiration}): gli intervalli RR dell'elettrocardiogramma vengono filtrati con un filtro IIR passa-basso che isola la modulazione lenta dovuta all'Aritmia Sinusale Respiratoria (il battito accelera in inspirazione e decelera in espirazione), da cui si stima il numero di atti respiratori al minuto, per identificare tachipnea da sforzo respiratorio.
   \item \textbf{Frequenza Cardiaca (BPM)} -- misurata per intercettare l'inevitabile tachicardia compensativa innescata dal distress respiratorio.
   \item \textbf{Temperatura Cutanea ($^\circ$C)} -- rilevazione periferica alla caviglia tramite termistore NTC.
   \item \textbf{Livello di carica della batteria (\texttt{battery\_pct})} -- stima percentuale tramite lettura ADC di un partitore resistivo, per la generazione di un allarme tecnico dedicato in caso di batteria scarica.
-  \item \textbf{Stato diagnostico} (\texttt{device\_status}) -- stringa generata dal firmware che valida la qualità del dato clinico e segnala errori tecnici (es. \texttt{ERR\_PPG\_NO\_CONTACT}).
+  \item \textbf{Stato diagnostico} (\texttt{device\_status}) -- stringa generata dal firmware che valida la qualità del dato clinico e segnala errori tecnici (es. \texttt{ERR\_ECG\_LEADS\_OFF}).
 \end{itemize}
 
 % =====================================================================
@@ -100,8 +99,8 @@ L'architettura adotta una forte \textbf{separazione delle responsabilità}. Il d
 
 \subsection{Sensori e interfacce logiche}
 \begin{enumerate}[leftmargin=1.5em,itemsep=3pt]
-  \item \textbf{PPG per SpO2 e Respiro (PPG analogico, due canali).} Front-end ottico realizzato in elettronica discreta (fotodiodo + amplificatore a transimpedenza), campionato su due canali ADC1 indipendenti dell'ESP32: \textbf{GPIO36} per il canale rosso e \textbf{GPIO39} per il canale infrarosso, a risoluzione 12 bit e frequenza di campionamento di \textbf{50 Hz}. La SpO2 è calcolata tramite il rapporto AC/DC delle due lunghezze d'onda (Ratio of Ratios). La Frequenza Respiratoria è estratta purificando il solo canale infrarosso tramite un \textbf{Filtro IIR Passa-Basso} ($\alpha = 0.05$) che sopprime la frequenza cardiaca ed evidenzia l'onda respiratoria, analizzata poi su una finestra circolare di 10 secondi.
-  \item \textbf{Frequenza Cardiaca (AD8232).} Front-end analogico ECG campionato a \textbf{250 Hz (GPIO34)}. Il BPM è ricavato mediante un algoritmo Pan-Tompkins ottimizzato con \textbf{Ring Buffer statici} per evitare allocazioni dinamiche (zero Garbage Collector) e garantire stabilità in produzione. I pin GPIO32 (LO+) e GPIO33 (LO--) forniscono il rilevamento leads-off.
+  \item \textbf{PPG a luce verde (singolo canale).} Front-end ottico realizzato in elettronica discreta (fotodiodo + amplificatore a transimpedenza), campionato su un canale ADC1 dell'ESP32 (\textbf{GPIO4}), a risoluzione 12 bit e frequenza di campionamento di \textbf{50 Hz}. La scelta di un singolo canale a luce verde -- a fronte di una minore profondità di penetrazione nel tessuto rispetto al rosso/infrarosso -- offre un più favorevole rapporto segnale/rumore nella rilevazione del battito a riposo, ma non consente il calcolo della SpO2, che richiederebbe necessariamente il confronto tra due lunghezze d'onda distinte. Il canale PPG fornisce quindi una stima ridondante del BPM e concorre, tramite il livello DC del segnale riflesso, alla determinazione del flag di aderenza cutanea (\texttt{sensor\_contact}).
+  \item \textbf{Frequenza Cardiaca e Respiratoria (AD8232, EDR).} Front-end analogico ECG campionato a \textbf{250 Hz (GPIO34)}. Il BPM è ricavato mediante un algoritmo Pan-Tompkins ottimizzato con \textbf{Ring Buffer statici} per evitare allocazioni dinamiche (zero Garbage Collector) e garantire stabilità in produzione. I pin GPIO32 (LO+) e GPIO33 (LO--) forniscono il rilevamento leads-off. Dagli stessi intervalli RR, raccolti su una finestra estesa di 30 secondi distinta da quella più breve usata per il BPM istantaneo, si deriva la Frequenza Respiratoria tramite la tecnica EDR (\emph{ECG-Derived Respiration}): un \textbf{Filtro IIR Passa-Basso} ($\alpha = 0.2$) isola la componente oscillatoria lenta dovuta all'Aritmia Sinusale Respiratoria, da cui si stima il numero di atti respiratori al minuto contando gli attraversamenti della media mobile del segnale filtrato.
   \item \textbf{Temperatura cutanea (Termistore NTC).} Sensore analogico, campionato su ADC1 (\textbf{GPIO35}), per la rilevazione della temperatura periferica, fisiologicamente più bassa rispetto a quella interna. Il valore grezzo letto dall'ADC è linearizzato via software per ottenere la temperatura in gradi Celsius.
   \item \textbf{Livello di batteria.} Una cella LiPo a singola tensione è monitorata tramite un partitore resistivo collegato a un canale ADC1 dedicato (GPIO25), distinto e non in conflitto con i canali usati da ECG, PPG e sensore di temperatura.
 \end{enumerate}
@@ -114,8 +113,7 @@ L'architettura adotta una forte \textbf{separazione delle responsabilità}. Il d
 \toprule
 \textbf{Componente} & \textbf{Interfaccia fisica} & \textbf{Tipo di segnale / dati} \\
 \midrule
-Front-end PPG -- canale rosso & ADC1 -- GPIO36 (12 bit, 50 Hz) & Tensione analogica (onda PPG, rosso) \\
-Front-end PPG -- canale infrarosso & ADC1 -- GPIO39 (12 bit, 50 Hz) & Tensione analogica (onda PPG, IR) \\
+Front-end PPG -- canale verde & ADC1 -- GPIO4 (12 bit, 50 Hz) & Tensione analogica (onda PPG, verde) \\
 Front-end ECG AD8232 & ADC1 -- GPIO34 (12 bit, 250 Hz) & Tensione analogica (onda ECG) \\
 Leads-off AD8232 & GPIO32 (LO+), GPIO33 (LO--) & Digitale (rilevamento aderenza elettrodi) \\
 Termistore NTC & ADC1 -- GPIO35 (12 bit) & Temperatura cutanea, linearizzata via software \\
@@ -139,7 +137,6 @@ Il payload canonico JSON trasmesso sul topic \texttt{alvea/devices/\{ID\}/teleme
   "timestamp": 1733740000.0,
   "bpm": 95.0,
   "skin_temperature": 32.5,
-  "spo2": 98.0,
   "respiration_rate": 22.0,
   "battery_pct": 84.5,
   "sensor_contact": true,
@@ -176,12 +173,11 @@ Il motore decisionale (implementato in Node-RED, lato backend) valuta i pacchett
 \toprule
 \textbf{Parametro Clinico} & \textbf{Normale (Nominale)} & \textbf{Warning (Lieve anomalia)} & \textbf{Critical (Crisi Asmatica)} \\
 \midrule
-\textbf{SpO2 (\%)} & 95 -- 100\% & 92 -- 94\% & $< 92\%$ \\
 \textbf{Frequenza Respiratoria} & 20 -- 30 atti/min & 31 -- 40 atti/min & $> 40$ atti/min (Tachipnea) \\
 \textbf{BPM (Cardiaca)} & 90 -- 110 BPM & 111 -- 130 BPM & $> 130$ BPM \\
 \bottomrule
 \end{tabularx}
-\caption*{\footnotesize Valori di riferimento tarati per la fascia di età pediatrica. La concomitanza di tachipnea e ipossia segnala un'esacerbazione asmatica severa.}
+\caption*{\footnotesize Valori di riferimento tarati per la fascia di età pediatrica. La concomitanza di tachipnea e tachicardia segnala un'esacerbazione asmatica severa.}
 \end{table}
 
 Inoltre, il sistema implementa un algoritmo \textbf{anti-panico}: se il \texttt{device\_status} differisce da \texttt{SYSTEM\_OK} (es. cavigliera sganciata), la pipeline \emph{inibisce} la generazione di allarmi medici, producendo esclusivamente un alert \textbf{Tecnico}.
@@ -198,8 +194,8 @@ La tabella seguente distingue ciò che è \IMPL{} nel repository sorgente da ci�
 \toprule
 \textbf{Funzionalità} & \textbf{Riferimento nel repo} & \textbf{Stato} \\
 \midrule
-Filtro IIR per estrazione frequenza respiratoria e SpO2 (PPG) & \texttt{firmware/sensor\_ppg.py} & \IMPL \\
-Acquisizione ECG con Ring Buffer Statici (Pan-Tompkins) & \texttt{firmware/sensor\_ecg.py} & \IMPL \\
+Acquisizione PPG a luce verde (BPM ridondante, aderenza cutanea) & \texttt{firmware/sensor\_ppg.py} & \IMPL \\
+Acquisizione ECG con Ring Buffer Statici (Pan-Tompkins) e stima della Frequenza Respiratoria via EDR (Filtro IIR su intervalli RR) & \texttt{firmware/sensor\_ecg.py}, \texttt{firmware/resp\_edr.py} & \IMPL \\
 Acquisizione temperatura cutanea (termistore NTC analogico) & \texttt{firmware/sensor\_temp.py} & \IMPL \\
 Monitoraggio livello di batteria (partitore resistivo su ADC) & \texttt{firmware/sensor\_battery.py} & \IMPL \\
 Macchina a stati MQTT asincrona + ricezione Comandi & \texttt{firmware/main\_real\_mqtt.py} & \IMPL \\
