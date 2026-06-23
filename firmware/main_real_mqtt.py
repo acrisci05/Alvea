@@ -127,7 +127,8 @@ while True:
         temp_val = thermo.read()
         
         if not contact_ecg:
-            # La condizione bloccante primaria è l'assenza di contatto ECG che rende indisponibili BPM e EDR (respiro)            status_string = "ERR_ECG_LEADS_OFF"
+            # La condizione bloccante primaria è l'assenza di contatto ECG che rende indisponibili BPM e EDR (respiro)            
+            status_string = "ERR_ECG_LEADS_OFF"
         elif temp_val is None:
             status_string = "ERR_TEMP_SENSOR_FAULT"
         elif not contact_ppg:
