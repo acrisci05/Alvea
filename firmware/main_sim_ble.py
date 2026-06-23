@@ -41,7 +41,6 @@ def ble_command_callback(payload):
 ble = BLEPeripheral(command_callback=ble_command_callback)
 alert_mgr = AlertManager(ble, transport_kind="ble")
 sensor = SimSensor()
-
 last_pub = time.time()
 
 while True:
@@ -58,6 +57,7 @@ while True:
         )
 
         alert_mgr.check_battery(reading["battery_pct"], patient_id=current_patient_id)
+        alert_mgr.check_resp_rate(reading["respiration_rate"] if reading["sensor_contact"] else None, patient_id=current_patient_id)
         
         if ble.is_connected():
             reading["device_status"] = "SYSTEM_OK" if current_patient_id else "WARN_PATIENT_NOT_ASSIGNED"

@@ -8,12 +8,10 @@ DEVICE_ID = "ALVEA_04"
 MQTT_BROKER = "192.168.1.50" 
 MQTT_PORT   = 1883        
 
-# Le credenziali MQTT riportate sono solo dei
-# fallback di sviluppo per non rompere l'esecuzione se secrets.py non
+# Le credenziali MQTT riportate sono solo dei fallback di sviluppo per non rompere l'esecuzione se secrets.py non
 # definisce queste variabili.
 MQTT_USER = "alvea_device"    
 MQTT_PASS = "secure_password"  
-
 TOPIC_DATA  = f"alvea/devices/{DEVICE_ID}/telemetry"
 TOPIC_CMD   = f"alvea/devices/{DEVICE_ID}/commands"  # Topic in ascolto per le configurazioni del medico
 TOPIC_ALERT = f"alvea/devices/{DEVICE_ID}/alerts"
@@ -28,8 +26,7 @@ BLE_CHAR_CMD_UUID = "abcdef02-1234-5678-1234-56789abcdef0"  # Comandi/config (WR
 # Li dichiariamo qui come valori di DEFAULT (Fallback).
 
 DEFAULT_PUBLISH_PERIOD_S = 1      # Frequenza di invio telemetria di base (default/fallback)
-DEFAULT_ALARM_SPO2_MIN   = 92.0   # Soglia di allerta saturazione (Asma)
-DEFAULT_ALARM_RESP_MAX   = 40.0   # Soglia tachipnea (Asma pediatrico)
+DEFAULT_ALARM_RESP_MAX   = 40.0   # Soglia tachipnea (Asma pediatrico), su Frequenza Respiratoria EDR
 DEFAULT_PATIENT_ID = None
 
 # Soglia di batteria scarica espressa in percentuale
@@ -48,8 +45,6 @@ BPM_SIM_MIN  = 90.0
 BPM_SIM_MAX  = 110.0
 TEMP_SKIN_SIM_MIN = 31.0
 TEMP_SKIN_SIM_MAX = 34.0
-SPO2_SIM_MIN = 95.0
-SPO2_SIM_MAX = 99.0
 RESP_RATE_SIM_MIN = 20.0     
 RESP_RATE_SIM_MAX = 30.0
 

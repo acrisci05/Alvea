@@ -11,6 +11,7 @@ from sensor_temp import TempSensor
 from sensor_ppg import PPGMonitor
 from sensor_battery import BatteryMonitor
 from alerts import AlertManager
+import resp_edr
 import ntp_time
 
 try:
@@ -44,10 +45,8 @@ def mqtt_callback(topic, msg):
                 current_publish_period = nuovo_periodo
                 print(f"-> [OK] Frequenza di invio telemetria aggiornata a {current_publish_period} secondi.")
 
-        # il medico/backend puo' assegnare (o rimuovere, con None/"") questo
-        # device a un paziente. Il valore viene poi incluso in ogni
-        # record di telemetria, così il backend non deve fare affidamento
-        # solo su una tabella statica device_id->patient_id lato server.
+        # il medico/backend puo' assegnare (o rimuovere, con None/"") questo device a un paziente.
+        # Il valore viene poi incluso in ogni record di telemetria
         if "patient_id" in payload:
             nuovo_patient_id = payload["patient_id"]
             current_patient_id = nuovo_patient_id if nuovo_patient_id else None
@@ -92,16 +91,13 @@ last_pub = time.time()
 ppg_sample_divider = 0
 
 while True:
-    # ------------------------------------------------------------------
+    
     # 1. TIMING DETERMINISTICO (250 Hz)
-    # ------------------------------------------------------------------
     while time.ticks_diff(time.ticks_us(), next_sample) < 0:
         pass
     next_sample = time.ticks_add(next_sample, SAMPLE_PERIOD_US)
-
-    # ------------------------------------------------------------------
+    
     # 2. ELABORAZIONE MEDICA
-    # ------------------------------------------------------------------
     contact_ecg = not ecg.leads_off()
     if contact_ecg:
         ecg.feed(ecg.read_raw())
@@ -111,12 +107,10 @@ while True:
     ppg_sample_divider += 1
     if ppg_sample_divider >= 5:
         ppg_sample_divider = 0
-        red_raw, ir_raw = ppg.read_raw()
-        ppg.feed(red_raw, ir_raw)
+        green_raw = ppg.read_raw()
+        ppg.feed(green_raw)
 
-    # ------------------------------------------------------------------
     # 3. MACCHINA A STATI DI RETE E ASCOLTO COMANDI
-    # ------------------------------------------------------------------
     wifi_mga.rinfresca_connessione()
     if wifi_mga.is_connected():
         if mqtt.check_connection():
@@ -125,10 +119,7 @@ while True:
     else:
         mqtt.is_connected = False
 
-    # ------------------------------------------------------------------
     # 4. TRASMISSIONE TELEMETRIA CRONOMETRATA
-    # ------------------------------------------------------------------
-    # `current_publish_period` è modificabile dal medico!
     if time.time() - last_pub >= current_publish_period:
         last_pub = time.time()
         
@@ -136,11 +127,12 @@ while True:
         temp_val = thermo.read()
         
         if not contact_ecg:
-            status_string = "ERR_ECG_LEADS_OFF"
-        elif not contact_ppg:
-            status_string = "ERR_PPG_NO_CONTACT"
+            # La condizione bloccante primaria è l'assenza di contatto ECG che rende indisponibili BPM e EDR (respiro)            status_string = "ERR_ECG_LEADS_OFF"
         elif temp_val is None:
             status_string = "ERR_TEMP_SENSOR_FAULT"
+        elif not contact_ppg:
+            # L'assenza di PPG resta un warning di qualita' del segnale, non un errore bloccante.
+            status_string = "WARN_PPG_NO_CONTACT"
         elif not mqtt.is_connected:
             status_string = "WARN_NETWORK_DISCONNECTED"
         elif current_patient_id is None:
@@ -149,8 +141,17 @@ while True:
             status_string = "SYSTEM_OK"
 
         bpm = ecg.compute_bpm() if contact_ecg else 0
-        spo2, resp_rate = ppg.compute_metrics() if contact_ppg else (0.0, 0.0)
         final_temp = temp_val if temp_val is not None else 0.0
+
+        # EDR (Frequenza Respiratoria): derivata dagli intervalli RR
+        # dell'ECG sulla finestra estesa (30s di default, vedi
+        # sensor_ecg.RR_HISTORY_S). Disponibile solo se il contatto ECG è presente.
+        if contact_ecg:
+            rr_history = ecg.get_rr_history()
+            resp_rate = resp_edr.compute_edr_resp_rate(rr_history)
+        else:
+            resp_rate = 0.0
+
         alert_mgr.check_fault(
             "ecg_leads_off", not contact_ecg,
             "bpm", "Elettrodi ECG scollegati / non a contatto rilevato",
@@ -158,7 +159,7 @@ while True:
         )
         alert_mgr.check_fault(
             "ppg_no_contact", not contact_ppg,
-            "spo2", "Sensore PPG non a contatto con la pelle",
+            "bpm_ppg", "Sensore PPG (luce verde) non a contatto con la pelle",
             gravita="WARNING", patient_id=current_patient_id,
         )
         alert_mgr.check_fault(
@@ -167,11 +168,7 @@ while True:
             gravita="CRITICAL", patient_id=current_patient_id,
         )
 
-        # Alert clinici basati su soglie (Punto 2 dei requisiti: "valore
-        # fuori soglia"). Verificati solo se il PPG e' a contatto, altrimenti
-        # spo2/resp_rate sono 0.0 per costruzione e non vanno interpretati
-        # come valori fisiologici.
-        alert_mgr.check_spo2(spo2, patient_id=current_patient_id)
+        # Alert clinico basato su soglia
         alert_mgr.check_resp_rate(resp_rate, patient_id=current_patient_id)
 
         battery_pct = battery.read_percent()
@@ -183,10 +180,9 @@ while True:
             "timestamp": time.time(),
             "bpm": float(bpm),
             "skin_temperature": float(final_temp),
-            "spo2": float(spo2),
             "respiration_rate": float(resp_rate),
             "battery_pct": float(battery_pct) if battery_pct is not None else None,
-            "sensor_contact": (contact_ecg and contact_ppg),
+            "sensor_contact": contact_ecg,
             "device_status": status_string,
             "source": "production_firmware"
         }

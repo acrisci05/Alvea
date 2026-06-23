@@ -5,7 +5,7 @@ import time
 import machine
 
 TEMP_MODE = "ntc" 
-PIN_DS18B20 = 4
+PIN_DS18B20 = 36 # Consente l'implementazione di un pattern a "driver intercambiabile"
 PIN_NTC     = 35       
 DS18B20_CONVERSION_MS = 750
 

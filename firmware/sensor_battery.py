@@ -18,7 +18,6 @@ VBAT_FULL = 4.2
 # ADC a 12 bit non isolato
 N_SAMPLES = 8
 
-
 class BatteryMonitor:
     """Wrapper per la lettura della percentuale di batteria residua."""
 
@@ -35,9 +34,8 @@ class BatteryMonitor:
                 self._hardware_ok = False
 
     def read_percent(self):
-        """Restituisce la percentuale stimata di batteria (0-100) oppure
-        None se il monitoraggio e' disabilitato o l'hardware non e'
-        disponibile (in tal caso l'AlertManager non generera' alert)."""
+        """Restituisce la percentuale stimata di batteria (0-100) oppure None se il monitoraggio e' disabilitato
+        o l'hardware non e'disponibile (in tal caso l'AlertManager non generera' alert)."""
         if not self._hardware_ok:
             return None
 

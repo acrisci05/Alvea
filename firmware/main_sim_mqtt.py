@@ -1,6 +1,5 @@
 # main_sim_mqtt.py - Telemetria SIMULATA via MQTT (Logica asincrona di produzione).
 
-
 import time
 import machine
 import json
@@ -75,7 +74,7 @@ while True:
     wifi_mga.rinfresca_connessione()
     if wifi_mga.is_connected():
         if mqtt.check_connection():
-            # Ascolta eventuali comandi di configurazione dal backend/medico
+            # Ascolto di eventuali comandi di configurazione dal backend/medico
             mqtt.check_messages()
     else:
         mqtt.is_connected = False
@@ -92,6 +91,7 @@ while True:
         )
         
         alert_mgr.check_battery(reading["battery_pct"], patient_id=current_patient_id)
+        alert_mgr.check_resp_rate(reading["respiration_rate"] if reading["sensor_contact"] else None, patient_id=current_patient_id)
 
         # Inietta lo stato di rete nel pacchetto diagnostico
         if not mqtt.is_connected:

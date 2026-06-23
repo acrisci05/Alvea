@@ -13,13 +13,13 @@ class SimSensor:
             "timestamp": 0,
             "bpm": 0.0,
             "skin_temperature": 0.0,
-            "spo2": 0.0,
             "respiration_rate": 0.0,
             "battery_pct": config.BATTERY_SIM_START,
             "sensor_contact": True,
             "device_status": "INIT",
             "source": "sim_test_rig"
         }
+        
         # Stato interno della scarica simulata (separato dal payload per
         # poter resettare facilmente la batteria senza toccare il dict
         # esposto al chiamante prima del primo read()).
@@ -44,12 +44,10 @@ class SimSensor:
         if self._contact:
             self._payload["bpm"] = round(random.uniform(config.BPM_SIM_MIN, config.BPM_SIM_MAX), 1)
             self._payload["skin_temperature"] = round(random.uniform(config.TEMP_SKIN_SIM_MIN, config.TEMP_SKIN_SIM_MAX), 1)
-            self._payload["spo2"] = round(random.uniform(config.SPO2_SIM_MIN, config.SPO2_SIM_MAX), 1)
             self._payload["respiration_rate"] = round(random.uniform(config.RESP_RATE_SIM_MIN, config.RESP_RATE_SIM_MAX), 1)
         else:
             self._payload["bpm"] = 0.0
             self._payload["skin_temperature"] = 0.0
-            self._payload["spo2"] = 0.0
             self._payload["respiration_rate"] = 0.0
             print("[SIM WARNING] Caduta di contatto simulata!")
 

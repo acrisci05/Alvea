@@ -34,7 +34,6 @@ class WiFiManager:
                 self.wlan.disconnect()
                 self._connect_attempt_started = None
             return
-
         # Non connesso e non in fase di connessione: avvia un nuovo tentativo.
         print("Wi-Fi: Connessione persa. Tentativo di riaggancio...")
         self.wlan.connect(self.ssid, self.password)

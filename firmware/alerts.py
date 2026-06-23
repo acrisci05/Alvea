@@ -1,9 +1,9 @@
 # alerts.py - Generazione e invio di alert locali rilevati dal device.
 #
 # Questo modulo ha il compito di generare alert sia di tipo "device/hardware"
-# (guasti/assenza di contatto dei sensori, batteria scarica) sia alert
-# clinici basati su soglia (SpO2, frequenza respiratoria), con un formato
-# dati compatibile con quanto richiesto
+# (guasti/assenza di contatto dei sensori, batteria scarica) sia l'alert
+# clinico basato su soglia per la frequenza respiratoria (via EDR), con
+# un formato dati compatibile con quanto richiesto
 
 import time
 import json
@@ -107,24 +107,6 @@ class AlertManager:
             gravita="WARNING",
             patient_id=patient_id,
             descrizione_risolto="Batteria non piu' sotto soglia critica (RISOLTO)",
-        )
-
-    def check_spo2(self, spo2, patient_id=None):
-        """Alert clinico: saturazione sotto la soglia configurata (Asma).
-        Da chiamare solo quando il sensore PPG e' realmente a contatto con
-        la pelle (spo2 == 0.0 indica buffer in riempimento/assenza di
-        contatto, non un valore fisiologico da allarmare)."""
-        if spo2 is None or spo2 <= 0.0:
-            return
-        is_low = spo2 < config.DEFAULT_ALARM_SPO2_MIN
-        self.check_fault(
-            "spo2_low",
-            is_low,
-            "spo2",
-            f"Saturazione SpO2 sotto soglia rilevata ({spo2:.1f}%)",
-            gravita="CRITICAL",
-            patient_id=patient_id,
-            descrizione_risolto="Saturazione SpO2 rientrata nella soglia (RISOLTO)",
         )
 
     def check_resp_rate(self, resp_rate, patient_id=None):

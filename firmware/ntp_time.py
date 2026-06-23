@@ -13,10 +13,8 @@ except ImportError:
 
 def sync_time(max_retries=3, retry_delay_s=2):
     """Sincronizza l'RTC interno con un server NTP.
-
-    Ritorna True se la sincronizzazione e' riuscita, False altrimenti.
-    In caso di fallimento il chiamante puo' decidere se continuare
-    comunque (segnalando un device_status di tipo WARN) o riprovare.
+    Ritorna True se la sincronizzazione e' riuscita, False altrimenti. In caso di fallimento il chiamante puo' decidere
+    se continuare comunque (segnalando un device_status di tipo WARN) o riprovare.
     """
     if ntptime is None:
         print("[NTP] Modulo ntptime non disponibile su questo firmware.")
