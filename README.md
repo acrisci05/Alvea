@@ -1,6 +1,6 @@
 # Alvea
 
-Dispositivo indossabile da caviglia **didattico** per il monitoraggio dell'**asma pediatrico** (SpO2, frequenza respiratoria, battito cardiaco, temperatura cutanea), 
+Dispositivo indossabile da caviglia **didattico** per il monitoraggio dell'**asma pediatrico** (EDR, battito cardiaco, temperatura cutanea), 
 con rilevamento dell'aderenza del sensore.
 Progetto per *Academy Medical Wearable Devices*.
 
