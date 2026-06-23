@@ -1,4 +1,12 @@
 # main_real_mqtt.py - Firmware di Produzione ad Alta Affidabilita' (Bidirezionale).
+#
+# Architettura sensoristica: ECG (AD8232) come unica fonte di BPM e
+# Frequenza Respiratoria. Niente PPG (rimosso: la ridondanza che offriva
+# sul BPM e sull'aderenza cutanea non giustificava il costo aggiuntivo di
+# cablaggio/test/documentazione per un prototipo didattico), niente SpO2
+# e niente HRV (scelta di progetto: tempi stretti, focus della tesi
+# sull'EDR). La Frequenza Respiratoria e' derivata dagli intervalli RR
+# dell'ECG (EDR - ECG-Derived Respiration), tramite il modulo resp_edr.py.
 
 import time
 import machine
@@ -8,7 +16,6 @@ from wifi import WiFiManager
 from transport_mqtt import MQTTPublisher
 from sensor_ecg import ECGMonitor, SAMPLE_PERIOD_US
 from sensor_temp import TempSensor
-from sensor_ppg import PPGMonitor
 from sensor_battery import BatteryMonitor
 from alerts import AlertManager
 import resp_edr
@@ -83,32 +90,24 @@ alert_mgr = AlertManager(mqtt, transport_kind="mqtt")
 # Inizializzazione Sensori Reali
 ecg = ECGMonitor()
 thermo = TempSensor()
-ppg = PPGMonitor()
 battery = BatteryMonitor()
 
 next_sample = time.ticks_us()
 last_pub = time.time()
-ppg_sample_divider = 0
 
 while True:
-    
+
     # 1. TIMING DETERMINISTICO (250 Hz)
     while time.ticks_diff(time.ticks_us(), next_sample) < 0:
         pass
     next_sample = time.ticks_add(next_sample, SAMPLE_PERIOD_US)
-    
+
     # 2. ELABORAZIONE MEDICA
     contact_ecg = not ecg.leads_off()
     if contact_ecg:
         ecg.feed(ecg.read_raw())
     else:
         ecg.reset()
-
-    ppg_sample_divider += 1
-    if ppg_sample_divider >= 5:
-        ppg_sample_divider = 0
-        green_raw = ppg.read_raw()
-        ppg.feed(green_raw)
 
     # 3. MACCHINA A STATI DI RETE E ASCOLTO COMANDI
     wifi_mga.rinfresca_connessione()
@@ -122,18 +121,16 @@ while True:
     # 4. TRASMISSIONE TELEMETRIA CRONOMETRATA
     if time.time() - last_pub >= current_publish_period:
         last_pub = time.time()
-        
-        contact_ppg = ppg.is_skin_on()
+
         temp_val = thermo.read()
-        
+
         if not contact_ecg:
-            # La condizione bloccante primaria è l'assenza di contatto ECG che rende indisponibili BPM e EDR (respiro)            
+            # Senza contatto ECG non sono disponibili BPM e EDR (respiro):
+            # e' la condizione bloccante primaria in questa architettura,
+            # essendo l'ECG l'unico sensore biomedicale del dispositivo.
             status_string = "ERR_ECG_LEADS_OFF"
         elif temp_val is None:
             status_string = "ERR_TEMP_SENSOR_FAULT"
-        elif not contact_ppg:
-            # L'assenza di PPG resta un warning di qualita' del segnale, non un errore bloccante.
-            status_string = "WARN_PPG_NO_CONTACT"
         elif not mqtt.is_connected:
             status_string = "WARN_NETWORK_DISCONNECTED"
         elif current_patient_id is None:
@@ -156,11 +153,6 @@ while True:
         alert_mgr.check_fault(
             "ecg_leads_off", not contact_ecg,
             "bpm", "Elettrodi ECG scollegati / non a contatto rilevato",
-            gravita="WARNING", patient_id=current_patient_id,
-        )
-        alert_mgr.check_fault(
-            "ppg_no_contact", not contact_ppg,
-            "bpm_ppg", "Sensore PPG (luce verde) non a contatto con la pelle",
             gravita="WARNING", patient_id=current_patient_id,
         )
         alert_mgr.check_fault(

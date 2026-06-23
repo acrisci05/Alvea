@@ -1,4 +1,16 @@
 # main_real_ble.py - Firmware ALTERNATIVO via BLE (demo/test locale).
+#
+# Il campo "timestamp" qui sotto NON e' sincronizzato via NTP (a differenza
+# della pipeline MQTT) perche' in modalita' BLE-only non c'e' garanzia di
+# accesso a Internet
+#
+# Architettura sensoristica: ECG (AD8232) come unica fonte di BPM e
+# Frequenza Respiratoria. Niente PPG (rimosso: la ridondanza che offriva
+# sul BPM e sull'aderenza cutanea non giustificava il costo aggiuntivo di
+# cablaggio/test/documentazione per un prototipo didattico), niente SpO2
+# e niente HRV (scelta di progetto: tempi stretti, focus della tesi
+# sull'EDR). La Frequenza Respiratoria e' derivata dagli intervalli RR
+# dell'ECG (EDR - ECG-Derived Respiration), tramite il modulo resp_edr.py.
 
 import time
 import json
@@ -7,10 +19,9 @@ import config
 from transport_ble import BLEPeripheral
 from sensor_ecg import ECGMonitor, SAMPLE_PERIOD_US
 from sensor_temp import TempSensor
-from sensor_ppg import PPGMonitor
 from sensor_battery import BatteryMonitor
 from alerts import AlertManager
-import resp_hrv
+import resp_edr
 
 print("=== ALVEA: AVVIO ARCHITETTURA BLE (modalita' alternativa/demo) ===")
 
@@ -53,13 +64,11 @@ alert_mgr = AlertManager(ble, transport_kind="ble")
 # Inizializzazione Sensori Reali
 ecg = ECGMonitor()
 thermo = TempSensor()
-ppg = PPGMonitor()
 battery = BatteryMonitor()
 
 # Variabili di Timing
 next_sample = time.ticks_us()
 last_pub = time.time()
-ppg_sample_divider = 0
 
 print("Attesa connessione App Mobile...")
 
@@ -69,33 +78,27 @@ while True:
         pass
     next_sample = time.ticks_add(next_sample, SAMPLE_PERIOD_US)
 
-    # 2. ELABORAZIONE MEDICA (ECG a 250Hz, PPG a 50Hz)
+    # 2. ELABORAZIONE MEDICA (ECG a 250Hz)
     contact_ecg = not ecg.leads_off()
     if contact_ecg:
         ecg.feed(ecg.read_raw())
     else:
         ecg.reset()
 
-    ppg_sample_divider += 1
-    if ppg_sample_divider >= 5:
-        ppg_sample_divider = 0
-        green_raw = ppg.read_raw()
-        ppg.feed(green_raw)
-
     # 3. TRASMISSIONE TELEMETRIA CRONOMETRATA (default 1 Hz, configurabile dal medico)
     if time.time() - last_pub >= current_publish_period:
         last_pub = time.time()
 
-        contact_ppg = ppg.is_skin_on()
         temp_val = thermo.read()
 
         # Diagnostica Hardware
         if not contact_ecg:
+            # Senza contatto ECG non sono disponibili BPM e EDR (respiro):
+            # e' la condizione bloccante primaria in questa architettura,
+            # essendo l'ECG l'unico sensore biomedicale del dispositivo.
             status_string = "ERR_ECG_LEADS_OFF"
         elif temp_val is None:
             status_string = "ERR_TEMP_SENSOR_FAULT"
-        elif not contact_ppg:
-            status_string = "WARN_PPG_NO_CONTACT"
         elif not ble.is_connected():
             status_string = "WARN_BLE_DISCONNECTED"
         elif current_patient_id is None:
@@ -106,20 +109,19 @@ while True:
         bpm = ecg.compute_bpm() if contact_ecg else 0
         final_temp = temp_val if temp_val is not None else 0.0
 
+        # EDR (Frequenza Respiratoria): derivata dagli intervalli RR
+        # dell'ECG sulla finestra estesa (30s di default, vedi
+        # sensor_ecg.RR_HISTORY_S). Disponibile solo se il contatto ECG e'
+        # presente.
         if contact_ecg:
             rr_history = ecg.get_rr_history()
-            resp_rate, hrv_sdnn = resp_hrv.compute_metrics(rr_history)
+            resp_rate = resp_edr.compute_edr_resp_rate(rr_history)
         else:
-            resp_rate, hrv_sdnn = 0.0, None
+            resp_rate = 0.0
 
         alert_mgr.check_fault(
             "ecg_leads_off", not contact_ecg,
             "bpm", "Elettrodi ECG scollegati / non a contatto rilevato",
-            gravita="WARNING", patient_id=current_patient_id,
-        )
-        alert_mgr.check_fault(
-            "ppg_no_contact", not contact_ppg,
-            "bpm_ppg", "Sensore PPG (luce verde) non a contatto con la pelle",
             gravita="WARNING", patient_id=current_patient_id,
         )
         alert_mgr.check_fault(
@@ -128,9 +130,8 @@ while True:
             gravita="CRITICAL", patient_id=current_patient_id,
         )
 
-        # Alert clinici basati su soglie
+        # Alert clinico basato su soglia
         alert_mgr.check_resp_rate(resp_rate, patient_id=current_patient_id)
-        alert_mgr.check_hrv(hrv_sdnn, patient_id=current_patient_id)
 
         # Batteria bassa del dispositivo
         battery_pct = battery.read_percent()
@@ -142,7 +143,6 @@ while True:
             "timestamp": time.time(),
             "bpm": float(bpm),
             "skin_temperature": float(final_temp),
-            "hrv_sdnn": float(hrv_sdnn) if hrv_sdnn is not None else None,
             "respiration_rate": float(resp_rate),
             "battery_pct": float(battery_pct) if battery_pct is not None else None,
             "sensor_contact": contact_ecg,

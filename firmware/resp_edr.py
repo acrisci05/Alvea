@@ -5,9 +5,8 @@
 # inspirazione e decelera in espirazione). Filtrando la serie degli
 # intervalli RR dell'ECG con un passa-basso e contando gli attraversamenti
 # della propria media mobile si stima il numero di atti respiratori al
-# minuto: stesso principio (filtro IIR + zero-crossing) gia' usato in
-# sensor_ppg.py per il vecchio calcolo del respiro IR-derived, ma applicato
-# alla serie RR invece che al segnale ottico grezzo.
+# minuto (filtro IIR + zero-crossing), senza richiedere alcun sensore
+# ottico dedicato.
 
 MIN_RR_FOR_EDR = 10    # numero minimo di RR per tentare la stima del respiro
 

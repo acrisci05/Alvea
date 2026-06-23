@@ -112,8 +112,8 @@ class AlertManager:
     def check_resp_rate(self, resp_rate, patient_id=None):
         """Alert clinico: tachipnea, frequenza respiratoria sopra la
         soglia configurata (Asma pediatrico). Da chiamare solo quando il
-        sensore PPG e' a contatto con la pelle (resp_rate == 0.0 indica
-        buffer in riempimento/assenza di contatto)."""
+        contatto ECG e' presente (resp_rate == 0.0 indica buffer RR
+        insufficiente/assenza di contatto, non un valore fisiologico)."""
         if resp_rate is None or resp_rate <= 0.0:
             return
         is_high = resp_rate > config.DEFAULT_ALARM_RESP_MAX
