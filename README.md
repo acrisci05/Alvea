@@ -91,7 +91,7 @@ entrypoint in main.py:
 | Hardware Reale via BLE | `main_real_ble.py` |
 
 
-<li>PPG (analogico): SDA→GPIO21, SCL→GPIO22 </li>
+<li>PPG (analogico): S→GPIO4 </li>
 <li>ECG (AD8232): OUTPUT→GPIO34, LO+→GPIO32, LO-→GPIO33 </li>
 <li>Temp (termistore NTC): DATA→GPIO4 </li>
 
