@@ -99,10 +99,9 @@ L'architettura adotta una forte \textbf{separazione delle responsabilità}. Il d
 
 \subsection{Sensori e interfacce logiche}
 \begin{enumerate}[leftmargin=1.5em,itemsep=3pt]
-  \item \textbf{PPG a luce verde (singolo canale).} Front-end ottico realizzato in elettronica discreta (fotodiodo + amplificatore a transimpedenza), campionato su un canale ADC1 dell'ESP32 (\textbf{GPIO4}), a risoluzione 12 bit e frequenza di campionamento di \textbf{50 Hz}. La scelta di un singolo canale a luce verde -- a fronte di una minore profondità di penetrazione nel tessuto rispetto al rosso/infrarosso -- offre un più favorevole rapporto segnale/rumore nella rilevazione del battito a riposo, ma non consente il calcolo della SpO2, che richiederebbe necessariamente il confronto tra due lunghezze d'onda distinte. Il canale PPG fornisce quindi una stima ridondante del BPM e concorre, tramite il livello DC del segnale riflesso, alla determinazione del flag di aderenza cutanea (\texttt{sensor\_contact}).
-  \item \textbf{Frequenza Cardiaca e Respiratoria (AD8232, EDR).} Front-end analogico ECG campionato a \textbf{250 Hz (GPIO34)}. Il BPM è ricavato mediante un algoritmo Pan-Tompkins ottimizzato con \textbf{Ring Buffer statici} per evitare allocazioni dinamiche (zero Garbage Collector) e garantire stabilità in produzione. I pin GPIO32 (LO+) e GPIO33 (LO--) forniscono il rilevamento leads-off. Dagli stessi intervalli RR, raccolti su una finestra estesa di 30 secondi distinta da quella più breve usata per il BPM istantaneo, si deriva la Frequenza Respiratoria tramite la tecnica EDR (\emph{ECG-Derived Respiration}): un \textbf{Filtro IIR Passa-Basso} ($\alpha = 0.2$) isola la componente oscillatoria lenta dovuta all'Aritmia Sinusale Respiratoria, da cui si stima il numero di atti respiratori al minuto contando gli attraversamenti della media mobile del segnale filtrato.
+  \item \textbf{Frequenza Cardiaca e Respiratoria (AD8232, EDR).} Front-end analogico ECG campionato a \textbf{250 Hz (GPIO34)}. Il BPM è ricavato mediante un algoritmo Pan-Tompkins ottimizzato con \textbf{Ring Buffer statici} per evitare allocazioni dinamiche (zero Garbage Collector) e garantire stabilità in produzione. I pin GPIO32 (LO+) e GPIO33 (LO--) forniscono il rilevamento leads-off, unica fonte del flag di aderenza cutanea (\texttt{sensor\_contact}), essendo l'ECG l'unico sensore biomedicale del dispositivo. Dagli stessi intervalli RR, raccolti su una finestra estesa di 30 secondi distinta da quella più breve usata per il BPM istantaneo, si deriva la Frequenza Respiratoria tramite la tecnica EDR (\emph{ECG-Derived Respiration}): un \textbf{Filtro IIR Passa-Basso} ($\alpha = 0.2$) isola la componente oscillatoria lenta dovuta all'Aritmia Sinusale Respiratoria, da cui si stima il numero di atti respiratori al minuto contando gli attraversamenti della media mobile del segnale filtrato.
   \item \textbf{Temperatura cutanea (Termistore NTC).} Sensore analogico, campionato su ADC1 (\textbf{GPIO35}), per la rilevazione della temperatura periferica, fisiologicamente più bassa rispetto a quella interna. Il valore grezzo letto dall'ADC è linearizzato via software per ottenere la temperatura in gradi Celsius.
-  \item \textbf{Livello di batteria.} Una cella LiPo a singola tensione è monitorata tramite un partitore resistivo collegato a un canale ADC1 dedicato (GPIO25), distinto e non in conflitto con i canali usati da ECG, PPG e sensore di temperatura.
+  \item \textbf{Livello di batteria.} Una cella LiPo a singola tensione è monitorata tramite un partitore resistivo collegato a un canale ADC1 dedicato (GPIO25), distinto e non in conflitto con i canali usati da ECG e sensore di temperatura.
 \end{enumerate}
 
 \begin{table}[h]
@@ -113,7 +112,6 @@ L'architettura adotta una forte \textbf{separazione delle responsabilità}. Il d
 \toprule
 \textbf{Componente} & \textbf{Interfaccia fisica} & \textbf{Tipo di segnale / dati} \\
 \midrule
-Front-end PPG -- canale verde & ADC1 -- GPIO4 (12 bit, 50 Hz) & Tensione analogica (onda PPG, verde) \\
 Front-end ECG AD8232 & ADC1 -- GPIO34 (12 bit, 250 Hz) & Tensione analogica (onda ECG) \\
 Leads-off AD8232 & GPIO32 (LO+), GPIO33 (LO--) & Digitale (rilevamento aderenza elettrodi) \\
 Termistore NTC & ADC1 -- GPIO35 (12 bit) & Temperatura cutanea, linearizzata via software \\
@@ -149,7 +147,7 @@ Il payload canonico JSON trasmesso sul topic \texttt{alvea/devices/\{ID\}/teleme
 Il microcontrollore sottoscrive al momento dell'avvio il topic \texttt{alvea/devices/\{ID\}/commands}. Quando il medico altera i parametri (es. \texttt{\{"publish\_period\_s": 5\}} oppure \texttt{\{"patient\_id": "p\_0007"\}}) dalla dashboard, l'ESP32 intercetta il messaggio via callback e aggiorna a runtime, in memoria, la frequenza di trasmissione e l'associazione paziente-dispositivo, senza necessità di riavvio. La stessa logica di configurazione è disponibile, con parità funzionale, anche sul trasporto BLE tramite scrittura su una characteristic dedicata.
 
 \subsection{Alert Tecnici Generati dal Firmware}
-Oltre alla telemetria periodica, il firmware pubblica autonomamente, sul topic \texttt{alvea/devices/\{ID\}/alerts}, allarmi di natura tecnica non derivabili dalla sola analisi delle soglie cliniche lato backend: guasto persistente di un sensore (elettrodi ECG scollegati, PPG non a contatto, sensore di temperatura non disponibile) e batteria scarica. Per evitare di generare un alert per ogni singolo glitch transitorio, una condizione viene segnalata solo dopo 5 letture consecutive anomale, e un secondo alert di risoluzione viene generato non appena la condizione rientra.
+Oltre alla telemetria periodica, il firmware pubblica autonomamente, sul topic \texttt{alvea/devices/\{ID\}/alerts}, allarmi di natura tecnica non derivabili dalla sola analisi delle soglie cliniche lato backend: guasto persistente di un sensore (elettrodi ECG scollegati, sensore di temperatura non disponibile) e batteria scarica. Per evitare di generare un alert per ogni singolo glitch transitorio, una condizione viene segnalata solo dopo 5 letture consecutive anomale, e un secondo alert di risoluzione viene generato non appena la condizione rientra.
 
 % =====================================================================
 \section{Ruoli, Autenticazione e Multitenancy}
@@ -194,7 +192,6 @@ La tabella seguente distingue ciò che è \IMPL{} nel repository sorgente da ci�
 \toprule
 \textbf{Funzionalità} & \textbf{Riferimento nel repo} & \textbf{Stato} \\
 \midrule
-Acquisizione PPG a luce verde (BPM ridondante, aderenza cutanea) & \texttt{firmware/sensor\_ppg.py} & \IMPL \\
 Acquisizione ECG con Ring Buffer Statici (Pan-Tompkins) e stima della Frequenza Respiratoria via EDR (Filtro IIR su intervalli RR) & \texttt{firmware/sensor\_ecg.py}, \texttt{firmware/resp\_edr.py} & \IMPL \\
 Acquisizione temperatura cutanea (termistore NTC analogico) & \texttt{firmware/sensor\_temp.py} & \IMPL \\
 Monitoraggio livello di batteria (partitore resistivo su ADC) & \texttt{firmware/sensor\_battery.py} & \IMPL \\
