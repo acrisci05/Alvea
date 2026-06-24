@@ -38,3 +38,20 @@ export async function getAlerts(token, deviceId) {
   if (!res.ok) return [];
   return res.json();
 }
+
+// Registra l'Expo push token sul backend (best-effort: non blocca l'app).
+export async function registerPushToken(token, expoPushToken) {
+  try {
+    const res = await fetch(`${API_URL}/push/register-token`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ token: expoPushToken }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}

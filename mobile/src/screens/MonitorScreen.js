@@ -1,72 +1,135 @@
 import React, { useEffect, useState, useRef } from "react";
-import { View, Text, StyleSheet, ScrollView } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
 import { WS_URL, DEVICE_ID } from "../config";
-import { getLatest } from "../api";
+import { getLatest, registerPushToken } from "../api";
+import { registerForPushNotificationsAsync, presentLocalAlert } from "../notifications";
 
-// Schermata di monitoraggio live. Si connette al WebSocket del backend e
-// aggiorna BPM/temperatura/stato fascia in tempo reale. Fallback: polling REST.
-export default function MonitorScreen({ token }) {
+const MAX_HISTORY = 30;
+const GREEN = "#5BC0BE", AMBER = "#F9A826", RED = "#E71D36", GREY = "#888";
+
+// Mini-grafico a barre senza librerie esterne: andamento di un parametro.
+function Sparkline({ data, color }) {
+  if (!data || data.length < 2) {
+    return <Text style={styles.sparkMuted}>Raccolta dati in corso…</Text>;
+  }
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1;
+  return (
+    <View style={styles.spark}>
+      {data.map((v, i) => {
+        const h = 6 + Math.round(((v - min) / range) * 46);
+        return <View key={i} style={[styles.sparkBar, { height: h, backgroundColor: color }]} />;
+      })}
+    </View>
+  );
+}
+
+function Metric({ label, value, unit, color }) {
+  return (
+    <View style={styles.card}>
+      <Text style={styles.label}>{label}</Text>
+      <Text style={[styles.big, { color }]}>
+        {value}
+        <Text style={styles.unit}> {unit}</Text>
+      </Text>
+    </View>
+  );
+}
+
+// Schermata di monitoraggio live (asma pediatrico). Parametri: respiro (EDR da
+// ECG), battito (ECG), temperatura cutanea (NTC). WebSocket + fallback REST;
+// notifica locale all'arrivo di un allarme.
+export default function MonitorScreen({ token, onLogout }) {
   const [reading, setReading] = useState(null);
   const [alerts, setAlerts] = useState([]);
+  const [respHistory, setRespHistory] = useState([]);
   const [connected, setConnected] = useState(false);
-  const wsRef = useRef(null);
+  const connectedRef = useRef(false);
+  const lastNotifRef = useRef({});
+
+  useEffect(() => {
+    (async () => {
+      const expoToken = await registerForPushNotificationsAsync();
+      if (expoToken) registerPushToken(token, expoToken);
+    })();
+  }, [token]);
+
+  function maybeNotify(a) {
+    if (!a || a.severity === "technical") return;
+    const now = Date.now();
+    const prev = lastNotifRef.current[a.kind] || 0;
+    if (now - prev < 30000) return; // anti-spam: 1 notifica/tipo ogni 30s
+    lastNotifRef.current[a.kind] = now;
+    presentLocalAlert(`Alvea — ${String(a.severity).toUpperCase()}`, a.message);
+  }
+
+  function pushReading(m) {
+    setReading(m);
+    if (typeof m.respiration_rate === "number" && m.respiration_rate > 0) {
+      setRespHistory((prev) => [...prev, m.respiration_rate].slice(-MAX_HISTORY));
+    }
+    if (m.alerts && m.alerts.length) {
+      setAlerts((prev) => [...m.alerts, ...prev].slice(0, 20));
+      m.alerts.forEach(maybeNotify);
+    }
+  }
 
   useEffect(() => {
     let ws;
     try {
       ws = new WebSocket(WS_URL);
-      wsRef.current = ws;
-      ws.onopen = () => setConnected(true);
-      ws.onclose = () => setConnected(false);
+      ws.onopen = () => { connectedRef.current = true; setConnected(true); };
+      ws.onclose = () => { connectedRef.current = false; setConnected(false); };
       ws.onmessage = (ev) => {
         const m = JSON.parse(ev.data);
-        if (m.type === "reading" && m.device_id === DEVICE_ID) {
-          setReading(m);
-          if (m.alerts && m.alerts.length) {
-            setAlerts((prev) => [...m.alerts, ...prev].slice(0, 20));
-          }
-        }
+        if (m.type === "reading" && m.device_id === DEVICE_ID) pushReading(m);
       };
-    } catch (e) {
-      // fallback polling
-    }
-    // Polling di sicurezza ogni 3s (se il WS non porta dati)
+    } catch (e) {}
     const poll = setInterval(async () => {
-      try {
-        const r = await getLatest(token, DEVICE_ID);
-        if (!connected) setReading({ ...r, type: "reading" });
-      } catch {}
+      if (connectedRef.current) return;
+      try { pushReading({ ...(await getLatest(token, DEVICE_ID)), type: "reading" }); } catch {}
     }, 3000);
     return () => { if (ws) ws.close(); clearInterval(poll); };
   }, [token]);
 
-  const contact = reading?.sensor_contact;
-  const bpm = reading?.bpm ?? "--";
-  const temp = reading?.temperature ?? "--";
-  const bpmColor = !contact ? "#888" : bpm > 140 || (bpm > 0 && bpm < 100) ? "#E71D36" : "#5BC0BE";
-  const tempColor = !contact ? "#888" : temp > 37.2 || (temp > 0 && temp < 36) ? "#E71D36" : "#5BC0BE";
+  const ok = reading && reading.sensor_contact && (reading.device_status ?? "SYSTEM_OK") === "SYSTEM_OK";
+  const v = (x) => (typeof x === "number" ? x : "--");
+  const resp = reading?.respiration_rate, bpm = reading?.bpm, skin = reading?.skin_temperature;
+
+  const respColor = !ok ? GREY : resp >= 40 ? RED : resp > 30 ? AMBER : GREEN;
+  const bpmColor = !ok ? GREY : bpm >= 160 || (bpm > 0 && bpm <= 50) ? RED : bpm > 120 || (bpm > 0 && bpm < 60) ? AMBER : GREEN;
+  const tempColor = !ok ? GREY : skin >= 38 ? RED : skin > 35 ? AMBER : GREEN;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: 20 }}>
-      <Text style={styles.header}>Alvea</Text>
+      <View style={styles.topbar}>
+        <Text style={styles.header}>Alvea</Text>
+        <TouchableOpacity onPress={onLogout} hitSlop={10}>
+          <Text style={styles.logout}>Esci</Text>
+        </TouchableOpacity>
+      </View>
       <Text style={styles.status}>
         {connected ? "● live" : "○ in attesa dati"} — {DEVICE_ID}
       </Text>
 
-      {!contact && (
+      {reading && !ok && (
         <View style={styles.banner}>
-          <Text style={styles.bannerText}>⚠ Fascia non a contatto</Text>
+          <Text style={styles.bannerText}>
+            ⚠ Sensore non a contatto{reading.device_status && reading.device_status !== "SYSTEM_OK" ? ` (${reading.device_status})` : ""}
+          </Text>
         </View>
       )}
 
-      <View style={styles.card}>
-        <Text style={styles.label}>Battito cardiaco</Text>
-        <Text style={[styles.big, { color: bpmColor }]}>{bpm} <Text style={styles.unit}>BPM</Text></Text>
+      <View style={styles.grid}>
+        <Metric label="Respiro" value={v(resp)} unit="att/min" color={respColor} />
+        <Metric label="Battito" value={v(bpm)} unit="BPM" color={bpmColor} />
+        <Metric label="Temp. cutanea" value={v(skin)} unit="°C" color={tempColor} />
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.label}>Temperatura</Text>
-        <Text style={[styles.big, { color: tempColor }]}>{temp} <Text style={styles.unit}>°C</Text></Text>
+      <View style={[styles.card, styles.cardWide]}>
+        <Text style={styles.label}>Andamento respiro</Text>
+        <Sparkline data={respHistory} color={respColor === GREY ? GREEN : respColor} />
       </View>
 
       <Text style={styles.section}>Allarmi recenti</Text>
@@ -75,7 +138,9 @@ export default function MonitorScreen({ token }) {
       ) : (
         alerts.map((a, i) => (
           <View key={i} style={[styles.alert, a.severity === "critical" && styles.alertCrit]}>
-            <Text style={styles.alertKind}>{a.severity.toUpperCase()}</Text>
+            <Text style={styles.alertKind}>
+              {(a.parameter ? a.parameter.toUpperCase() + " · " : "") + String(a.severity).toUpperCase()}
+            </Text>
             <Text style={styles.alertMsg}>{a.message}</Text>
           </View>
         ))
@@ -86,14 +151,21 @@ export default function MonitorScreen({ token }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#0B132B" },
+  topbar: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   header: { color: "#fff", fontSize: 26, fontWeight: "800" },
+  logout: { color: "#5BC0BE", fontWeight: "700" },
   status: { color: "#9bb", marginBottom: 16 },
   banner: { backgroundColor: "#E71D36", padding: 12, borderRadius: 10, marginBottom: 14 },
   bannerText: { color: "#fff", fontWeight: "700", textAlign: "center" },
-  card: { backgroundColor: "#1C2541", borderRadius: 16, padding: 22, marginBottom: 14 },
-  label: { color: "#9bb", fontSize: 14 },
-  big: { fontSize: 52, fontWeight: "800", marginTop: 4 },
-  unit: { fontSize: 20, color: "#9bb" },
+  grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
+  card: { backgroundColor: "#1C2541", borderRadius: 16, padding: 18, marginBottom: 12, width: "48%" },
+  cardWide: { width: "100%" },
+  label: { color: "#9bb", fontSize: 13 },
+  big: { fontSize: 34, fontWeight: "800", marginTop: 6 },
+  unit: { fontSize: 13, color: "#9bb", fontWeight: "600" },
+  spark: { flexDirection: "row", alignItems: "flex-end", height: 56, marginTop: 12, gap: 2 },
+  sparkBar: { flex: 1, borderRadius: 2, opacity: 0.85 },
+  sparkMuted: { color: "#6b8", marginTop: 12, fontSize: 12 },
   section: { color: "#fff", fontSize: 18, fontWeight: "700", marginTop: 10, marginBottom: 8 },
   muted: { color: "#8da" },
   alert: { backgroundColor: "#1C2541", borderLeftWidth: 4, borderLeftColor: "#F9A826",

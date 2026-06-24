@@ -1,17 +1,24 @@
 {
   "name": "alvea-mobile",
   "version": "1.0.0",
-  "main": "node_modules/expo/AppEntry.js",
+  "main": "index.js",
   "scripts": {
     "start": "expo start",
+    "start:tunnel": "expo start --tunnel",
     "android": "expo start --android",
-    "ios": "expo start --ios"
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "doctor": "npx expo-doctor"
   },
   "dependencies": {
-    "expo": "~51.0.0",
-    "react": "18.2.0",
-    "react-native": "0.74.5",
-    "@react-native-async-storage/async-storage": "1.23.1"
+    "expo": "~54.0.34",
+    "expo-constants": "~18.0.13",
+    "expo-dev-client": "~6.0.21",
+    "expo-notifications": "~0.32.17",
+    "expo-status-bar": "~3.0.9",
+    "react": "19.1.0",
+    "react-native": "0.81.5",
+    "@react-native-async-storage/async-storage": "2.2.0"
   },
   "private": true
 }

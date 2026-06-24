@@ -24,7 +24,7 @@ export default function LoginScreen({ onLogin }) {
   return (
     <View style={styles.container}>
       <Text style={styles.logo}>Alvea</Text>
-      <Text style={styles.subtitle}>Monitoraggio del battito e della temperatura</Text>
+      <Text style={styles.subtitle}>Monitoraggio respiratorio e cardiaco · asma pediatrico</Text>
       <TextInput style={styles.input} placeholder="Username" autoCapitalize="none"
         placeholderTextColor="#8da" value={username} onChangeText={setUsername} />
       <TextInput style={styles.input} placeholder="Password" secureTextEntry

@@ -5,8 +5,26 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "splash": { "backgroundColor": "#0B132B" },
-    "android": { "package": "com.alvea" },
-    "ios": { "bundleIdentifier": "com.alvea" }
+    "newArchEnabled": true,
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#0B132B"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.alvea"
+    },
+    "android": {
+      "package": "com.alvea",
+      "edgeToEdgeEnabled": true
+    },
+    "plugins": [
+      "expo-notifications"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "REPLACE_WITH_YOUR_EAS_PROJECT_ID"
+      }
+    }
   }
 }
