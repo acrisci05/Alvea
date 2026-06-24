@@ -12,7 +12,7 @@ import asyncio
 import json
 import aiomqtt
 
-from . import config, crud, alerts, influx
+from . import config, crud, alerts, influx, push
 from .database import AsyncSessionLocal
 from .realtime import publish_event
 from .schemas import ReadingIn
@@ -54,12 +54,24 @@ async def _handle_message(payload_str: str):
         for a in fired:
             await crud.save_alert(db, reading["device_id"], a)
 
+        # Notifica push al caregiver proprietario in caso di allarmi critici.
+        critical = [a for a in fired if a["severity"] == "critical"]
+        if critical:
+            device = await crud.get_device(db, reading["device_id"])
+            if device and device.owner_id:
+                tokens = await crud.get_push_tokens_for_owner(db, device.owner_id)
+                a0 = critical[0]
+                await push.send_push(tokens, "Alvea — allarme critico", a0["message"],
+                                     {"device_id": reading["device_id"]})
+
     await publish_event({
         "type": "reading",
         "device_id": reading["device_id"],
         "ts": str(saved.ts),
         "bpm": reading["bpm"],
-        "temperature": reading["temperature"],
+        "respiration_rate": reading["respiration_rate"],
+        "skin_temperature": reading["skin_temperature"],
         "sensor_contact": reading["sensor_contact"],
+        "device_status": reading.get("device_status"),
         "alerts": fired,
     })

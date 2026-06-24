@@ -85,7 +85,7 @@ async def authorized_device(device_id: str, db: AsyncSession,
                             user: models.Caregiver) -> models.Device:
     """Restituisce il device se l'utente è autorizzato a vederlo.
 
-    - medico: accesso a tutti i device.
+    - medico: accesso a tutti i device;
     - caregiver: solo i device di cui è proprietario.
     Solleva 404 se il device non esiste, 403 se non di competenza.
     """
@@ -254,6 +254,15 @@ async def update_patient(device_id: str, data: schemas.PatientRecordUpdate,
     await crud.write_audit(db, action="update_patient_record", username=user.username,
                            role=user.role, resource=device_id, ip=_client_ip(request))
     return record
+
+
+# ===================== NOTIFICHE PUSH =====================
+@app.post("/push/register-token")
+async def register_push_token(data: schemas.PushTokenIn,
+                              db: AsyncSession = Depends(get_db),
+                              user: models.Caregiver = Depends(get_current_user)):
+    await crud.register_push_token(db, data.token, user.id)
+    return {"message": "Token registrato"}
 
 
 # ===================== AUDIT LOG (solo medico) =====================
