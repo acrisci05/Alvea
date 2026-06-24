@@ -5,33 +5,33 @@
 ```mermaid
 sequenceDiagram
     autonumber
-    participant ESP as ESP32 (sensore/sim)
+    participant ESP as ESP32 (Firmware/Sim)
     participant MQ as Mosquitto (MQTT)
     participant NR as Node-RED
     participant DB as InfluxDB
     participant GF as Grafana
     participant BE as Backend FastAPI
-    participant SQ as SQLite
-    participant APP as App mobile
+    participant SQ as DB Relazionale
+    participant APP as App mobile (Paziente)
 
-    loop ogni secondo (1 Hz)
-        ESP->>MQ: publish alvea/data (JSON)
-        par Percorso dashboard
-            MQ-->>NR: messaggio
-            NR->>NR: soglie + anti-falso-allarme
-            NR->>DB: write line protocol (vitals)
+    loop Frequenza di campionamento (es. 1 Hz)
+        ESP->>MQ: publish alvea/devices/{ID}/telemetry (JSON)
+        par Percorso Dashboard Medico
+            MQ-->>NR: ricezione messaggio
+            NR->>NR: calcolo soglie asma (Respiro, BPM, Temp)
+            NR->>DB: write line protocol (vitals_asthma)
             GF->>DB: query Flux (refresh 1s)
-        and Percorso app
-            MQ-->>BE: messaggio (listener aiomqtt)
-            BE->>BE: valida + valuta soglie
-            BE->>SQ: salva reading (+ alert)
+        and Percorso App Paziente
+            MQ-->>BE: messaggio (listener MQTT)
+            BE->>BE: valida payload + valuta soglie
+            BE->>SQ: salva reading (+ log alert)
             BE-->>APP: WebSocket /ws/live (push)
         end
     end
 
-    alt fascia staccata (sensor_contact=false)
-        NR->>MQ: publish alvea/alerts (technical)
-        BE-->>APP: evento alert "Fascia non a contatto"
+    alt Anomalia hardware (device_status != SYSTEM_OK)
+        NR->>MQ: publish alvea/devices/{ID}/alerts (technical)
+        BE-->>APP: push alert "Sensore staccato o guasto"
     end
 ```
 
@@ -40,20 +40,43 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     autonumber
-    participant APP as App mobile
+    participant Client as App / Dashboard
     participant BE as Backend FastAPI
-    participant SQ as SQLite
+    participant SQ as DB Relazionale
 
-    APP->>BE: POST /login (username, password)
-    BE->>SQ: SELECT caregiver by username
-    SQ-->>BE: record (hashed_password)
+    Client->>BE: POST /login (username, password)
+    BE->>SQ: SELECT user by username
+    SQ-->>BE: record (hashed_password, role)
     BE->>BE: verify_password (bcrypt)
+    
     alt credenziali valide
-        BE->>BE: create_access_token (JWT, exp 60m)
-        BE-->>APP: 200 { access_token }
-        APP->>BE: GET /devices/{id}/latest (Bearer token)
-        BE-->>APP: ultima lettura
+        BE->>BE: create_access_token (JWT con scope/role)
+        BE-->>Client: 200 { access_token, role }
+        Client->>BE: GET /api/data (Bearer token)
+        BE->>BE: check_permissions(role)
+        BE-->>Client: dati autorizzati (proprio ID per Paziente, tutti per Medico)
     else credenziali errate
-        BE-->>APP: 400 Credenziali errate
+        BE-->>Client: 401 Unauthorized
     end
+```
+
+## 3) Configurazione da remoto del Dispositivo
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Med as Dashboard Medico
+    participant BE as Backend FastAPI
+    participant SQ as DB Relazionale
+    participant MQ as Mosquitto (MQTT)
+    participant ESP as ESP32 (Firmware)
+
+    Med->>BE: POST /devices/{ID}/config { publish_period_s: 5 }
+    BE->>BE: Verifica permessi (role == 'medico')
+    BE->>SQ: Aggiorna configurazione dispositivo
+    BE->>MQ: publish alvea/devices/{ID}/commands (JSON)
+    MQ-->>ESP: push su topic sottoscritto
+    ESP->>ESP: mqtt_callback elabora payload
+    ESP->>ESP: aggiorna current_publish_period
+    ESP->>MQ: publish telemetria a nuova frequenza (5s)
 ```

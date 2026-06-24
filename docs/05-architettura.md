@@ -1,47 +1,46 @@
 # Architettura del Sistema
 
-## Vista d'insieme (data flow)
+## Vista d'insieme (data flow bidirezionale)
 
 ```mermaid
 flowchart TD
-    subgraph Edge["Edge — ESP32"]
-        S1[Sensore AD8232 / Simulatore]
-        S2[Temperatura]
-        FW[Firmware MicroPython]
+    subgraph Edge["Edge — ESP32 (Cavigliera Alvea)"]
+        S1[Sensori reali: ECG (BPM+EDR), NTC<br/>o Simulatore HIL]
+        FW[Firmware MicroPython<br/>Asincrono]
         S1 --> FW
-        S2 --> FW
     end
 
-    FW -- "MQTT 1 Hz<br/>alvea/data" --> MQ[(Mosquitto)]
-    FW -. "BLE NOTIFY (alt.)" .-> APP[App mobile<br/>React Native]
+    FW -- "MQTT (TX 1 Hz)<br/>alvea/devices/{ID}/telemetry" --> MQ[(Mosquitto)]
+    MQ -- "MQTT (RX Comandi)<br/>alvea/devices/{ID}/commands" --> FW
+    FW -. "BLE NOTIFY (alt.)" .-> APP[App mobile<br/>Paziente]
 
     subgraph Server["Server — Docker Compose"]
-        MQ --> NR[Node-RED<br/>soglie + filtri]
+        MQ --> NR[Node-RED<br/>motore regole + alert]
         NR --> IDB[(InfluxDB)]
-        IDB --> GF[Grafana<br/>dashboard]
-        MQ --> BE[Backend FastAPI<br/>auth + ingest + realtime]
-        BE --> SQL[(SQLite)]
+        IDB --> GF[Grafana<br/>dashboard Medico]
+        MQ --> BE[Backend FastAPI<br/>auth RBAC + ingest + realtime]
+        BE --> SQL[(DB Relazionale)]
+        BE -- "Configurazioni" --> MQ
     end
 
     BE -- "WebSocket / SSE" --> APP
-    GF --- Browser[Browser operatore]
+    GF --- Browser[Browser Medico]
 ```
 
-Due percorsi paralleli, **stesso payload**:
-- **Operativo:** ESP32 → MQTT → Node-RED → InfluxDB → Grafana (grafici storici).
-- **Applicativo:** ESP32 → MQTT → Backend → SQLite → WebSocket → App (live + auth).
-- **Alternativo:** ESP32 → BLE → App (collegamento diretto senza rete).
+Tre percorsi paralleli, **stesso payload**:
+- **Operativo/ Clinico:** ESP32 → MQTT → Node-RED → InfluxDB → Grafana (grafici storici).
+- **Applicativo/ Paziente:** ESP32 → MQTT → Backend → DB Relazionale → WebSocket → App (live + alert).
+- **Controllo (Ritorno):** Backend (input del Medico) → MQTT (commands) → ESP32 (aggiornamento configurazioni on-the-fly).
+- **Alternativo:** ESP32 → BLE → App (collegamento locale).
 
 ## Modello 4+1 (sintesi)
 
 - **Vista logica:** Caregiver, Device, Reading, Alert (vedi E-R).
-- **Vista di processo:** task asincroni del backend (listener MQTT + endpoint
-  REST/WebSocket/SSE) che girano in concorrenza tramite `asyncio`.
+- **Vista di processo:** task asincroni sull'Edge (lettura sensori non bloccante 250Hz/50Hz) e sul Server (listener MQTT + endpoint REST/WebSocket concorrenti tramite `asyncio`).
 - **Vista di sviluppo:** monorepo a moduli — `firmware/`, `backend/`,
   `docker-stack/`, `mobile/`, `scripts/`, `docs/`.
-- **Vista fisica:** ESP32 (edge) ↔ rete Wi-Fi locale ↔ host Docker (PC) ↔
-  smartphone. Nessun servizio in cloud: tutto in LAN (vincolo privacy).
-- **Scenari (+1):** i casi d'uso del documento Fase 3.
+- **Vista fisica:** ESP32 (edge alla caviglia) ↔ rete Wi-Fi ↔ host Docker (Server) ↔ smartphone/PC. Architettura deployabile in cloud o on-premise.
+- **Scenari (+1):** i casi d'uso del documento Fase 3 (Monitoraggio asma, gestione alert, configurazione remota).
 
 ## Porte dei servizi
 

@@ -53,7 +53,7 @@
 \begin{center}
   {\footnotesize ACADEMY \textbf{MEDICAL WEARABLE DEVICES} -- A.A. 2025/2026}\\[1.2em]
   {\Huge\bfseries Alvea}\\[0.6em]
-  {\large Ecosistema IoT distribuito per il monitoraggio\\ cardio-termico pediatrico}\\[1.4em]
+  {\large Dispositivo indossabile e piattaforma IoT per il monitoraggio\\ dell'asma pediatrico}\\[1.4em]
   \rule{0.7\textwidth}{0.4pt}\\[0.8em]
   {\normalsize\textbf{Gruppo 04}}\\[0.3em]
   {\small Antonio Crisci \quad$\cdot$\quad Silvia Liguoro \quad$\cdot$\quad Domenico Chiacchio \quad$\cdot$\quad Rita Pia Iacoviello}\\[1.0em]
@@ -65,9 +65,9 @@
 
 \begin{center}
 \fbox{\parbox{0.92\textwidth}{\footnotesize\centering
-\textbf{Avvertenza.} Alvea è un \textbf{prototipo didattico}, non un dispositivo
+\textbf{Avvertenza.} Alvea \`e un \textbf{prototipo didattico}, non un dispositivo
 medico certificato. Non deve essere impiegato per decisioni cliniche reali. Le soglie e le
-classificazioni descritte hanno finalità esclusivamente accademiche e dimostrative.}}
+classificazioni descritte hanno finalit\`a esclusivamente accademiche e dimostrative.}}
 \end{center}
 
 \vspace{0.6em}
@@ -79,66 +79,27 @@ classificazioni descritte hanno finalità esclusivamente accademiche e dimostrat
 % =====================================================================
 \section{Descrizione del Sistema}
 
-Il progetto \textbf{Alvea} nasce come soluzione ingegneristica per il monitoraggio
-continuo, non invasivo e in tempo reale dello stato cardio-termico di neonati e lattanti durante
-il sonno domestico. L'obiettivo primario è la \textbf{sorveglianza attiva} mirata a evidenziare
-precocemente anomalie della frequenza cardiaca (bradicardie/tachicardie a riposo) e sbalzi
-termici corporei anomali, distinguendo gli allarmi clinici reali dai falsi positivi tecnologici
-dovuti al distacco della fascia.
+Il progetto \textbf{Alvea} nasce come soluzione ingegneristica per il monitoraggio continuo, non invasivo e in tempo reale dell'asma pediatrico. L'architettura prevede un dispositivo indossabile periferico (posizionato sulla caviglia del bambino) progettato per la \textbf{sorveglianza attiva}. L'obiettivo primario \`e rilevare precocemente i marcatori di una crisi asmatica (ipossia, tachipnea e tachicardia compensativa), distinguendo in modo robusto gli allarmi clinici dai guasti hardware o dal distacco accidentale del sensore.
 
-I dati biomedici grezzi vengono acquisiti da un \textbf{Edge Node basato su ESP32} e inviati a
-\textbf{1 Hz} a un'infrastruttura software locale e containerizzata, che esegue la validazione
-logica, la classificazione delle anomalie, la storicizzazione cronologica delle serie temporali
-e la propagazione realtime verso l'applicazione del caregiver.
+I dati biomedici grezzi vengono acquisiti da un \textbf{Edge Node basato su ESP32} ad alta efficienza e trasmessi a un'infrastruttura software (Backend + Node-RED + InfluxDB + Grafana). Il sistema \`e nativamente \textbf{bidirezionale}, consentendo al medico di inviare configurazioni (es. variazione della frequenza di campionamento) direttamente al dispositivo.
 
 \subsection{Parametri biomedicali misurati}
 \begin{itemize}[leftmargin=1.3em,itemsep=2pt]
-  \item \textbf{Frequenza cardiaca (BPM)} -- derivata dal segnale ECG per rilevare bradicardie
-        (potenzialmente legate a ipossia/ostruzione delle vie aeree) o tachicardie anomale a riposo.
-  \item \textbf{Temperatura cutanea ($^\circ$C)} -- rilevazione della temperatura superficiale per
-        l'identificazione di stati febbrili acuti e la prevenzione di ipo/ipertermia ambientale.
-  \item \textbf{Stato di contatto hardware} (\texttt{sensor\_contact}) -- flag booleano che verifica
-        l'aderenza cutanea del sensore e permette di discriminare in tempo reale i falsi allarmi
-        tecnologici dalle emergenze cliniche reali.
+  \item \textbf{Frequenza Respiratoria (Atti/min)} -- stimata dall'ECG tramite \textbf{EDR} (ECG-Derived Respiration), analizzando il \emph{baseline wandering} del segnale per identificare la tachipnea da sforzo respiratorio.
+  \item \textbf{Frequenza Cardiaca (BPM)} -- misurata dall'ECG per intercettare l'inevitabile tachicardia compensativa innescata dal distress respiratorio.
+  \item \textbf{Temperatura Cutanea ($^\circ$C)} -- rilevazione periferica alla caviglia tramite termistore NTC di precisione.
+  \item \textbf{Stato diagnostico} (\texttt{device\_status}) -- stringa generata dal firmware che valida la qualit\`a del dato clinico e segnala errori tecnici (es. \texttt{ERR\_ECG\_LEADS\_OFF}).
 \end{itemize}
-
-\subsection{Utente finale e configurazione multitenant}
-L'utente finale è identificato nei \textbf{genitori/caregiver} e nel \textbf{personale pediatrico}.
-Il dispositivo si configura come strumento di telemedicina domestica ad alta usabilità: ogni fascia
-è univocamente identificata da un \texttt{device\_id} e associata, in fase di registrazione, a uno
-specifico account caregiver. La logica di \textbf{profilazione per età} del paziente
-(es. fascia neonatale 0--1 mese, fascia d'infanzia 1--12 mesi) è prevista per adattare dinamicamente
-le soglie di intervento; lo stato attuale della sua implementazione è riportato nella
-Sezione~\ref{sec:stato}.
 
 % =====================================================================
 \section{Architettura del Sistema e Vincoli Progettuali}
 
-L'architettura è strutturata secondo i principi di economicità, scalabilità e \textbf{separazione
-dei compiti} tra lo strato di sensing biologico (sul paziente) e lo strato di routing/processing
-di rete (Gateway locale).
+L'architettura adotta una forte \textbf{separazione delle responsabilit\`a}. Il dispositivo Edge non si limita a inviare dati grezzi, ma effettua un pre-processing matematico avanzato a latenza zero tramite l'ESP32.
 
 \subsection{Sensori e interfacce logiche}
-In conformità con le indicazioni metodologiche del corso, l'architettura hardware valorizza
-l'elaborazione del segnale a bordo del microcontrollore tramite convertitori analogico-digitali
-(ADC), impiegando un \textbf{front-end analogico discreto} anziché moduli integrati ad alta
-astrazione. Il nucleo elaborativo dell'Edge Node è l'\textbf{ESP32}, che acquisisce i segnali
-tramite le seguenti interfacce fisiche:
-
 \begin{enumerate}[leftmargin=1.5em,itemsep=3pt]
-  \item \textbf{Frequenza cardiaca (ECG analogico, AD8232).} Il modulo AD8232 è un front-end
-        analogico per elettrocardiografia che restituisce l'onda ECG come tensione continua,
-        campionata dall'ESP32 sul canale \textbf{ADC1 (GPIO34)} a risoluzione 12 bit
-        (frequenza di campionamento 250~Hz). Il BPM è ricavato nel dominio del tempo da un
-        algoritmo di rilevazione dei complessi QRS in stile \emph{Pan--Tompkins} (derivata al
-        quadrato, soglia adattiva, periodo refrattario, mediana degli intervalli RR). I pin
-        \textbf{GPIO32 (LO+)} e \textbf{GPIO33 (LO--)} forniscono il rilevamento \emph{leads-off}
-        che determina il flag \texttt{sensor\_contact}.
-  \item \textbf{Temperatura cutanea.} Il percorso ECG non fornisce la temperatura: il firmware
-        prevede un sensore dedicato selezionabile via configurazione tra \textbf{termistore NTC
-        analogico} su \textbf{ADC1 (GPIO35)}, linearizzato via software, e sonda digitale 1-Wire
-        \textbf{DS18B20}. In assenza di hardware è disponibile una modalità \emph{stub} a valore
-        nominale costante per validare l'intera pipeline.
+  \item \textbf{ECG (AD8232) per BPM e Respiro.} Front-end analogico ECG campionato a \textbf{250 Hz (GPIO34)}. Il BPM \`e ricavato con un algoritmo \textbf{Pan-Tompkins} ottimizzato con \textbf{Ring Buffer statici} per evitare allocazioni dinamiche (zero Garbage Collector). Dallo \emph{stesso} segnale ECG si stima la Frequenza Respiratoria via \textbf{EDR}: il segnale \`e sotto-campionato a 25 Hz e filtrato con un \textbf{IIR Passa-Basso} ($\alpha = 0.1$) che isola il \emph{baseline wandering} respiratorio, analizzato su una finestra di 12 secondi tramite conteggio degli attraversamenti.
+  \item \textbf{Temperatura cutanea (termistore NTC).} Sensore analogico di precisione letto su \textbf{ADC (GPIO35)} tramite partitore di tensione; la conversione resistenza$\rightarrow$temperatura usa l'\textbf{equazione di Steinhart-Hart (Beta)}.
 \end{enumerate}
 
 \begin{table}[h]
@@ -151,215 +112,92 @@ tramite le seguenti interfacce fisiche:
 \midrule
 Front-end ECG AD8232 & ADC1 -- GPIO34 (12 bit)        & Tensione analogica (onda ECG) \\
 Leads-off AD8232     & GPIO32 (LO+), GPIO33 (LO--)    & Digitale (rilevamento aderenza) \\
-Sensore temperatura  & ADC1 -- GPIO35 (NTC) / 1-Wire (DS18B20) & Temperatura cutanea linearizzata \\
-Transceiver Wi-Fi    & TCP/IP                         & Pacchetti MQTT (radiofrequenza) \\
+Termistore NTC       & ADC1 -- GPIO35 (12 bit)        & Tensione analogica (temperatura) \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-\subsection{Vincoli tecnici e di progetto}
-\begin{itemize}[leftmargin=1.3em,itemsep=2pt]
-  \item \textbf{Comfort del paziente.} Hardware alloggiato in una fascia ergonomica in tessuto
-        elastico anallergico, applicata senza frizioni, evitando elettrodi adesivi rigidi.
-  \item \textbf{Sicurezza elettrica e termica.} Funzionamento a bassissima tensione (3.3~V) da
-        accumulatore isolato, con isolamento galvanico assoluto dalla rete domestica a 230~V.
-  \item \textbf{Autonomia.} Alimentazione tramite singola cella LiPo da 3.7~V; l'ottimizzazione
-        dei cicli di clock e gli stati di basso consumo dell'ESP32 sono previsti per coprire le
-        ore notturne (cfr. Sezione~\ref{sec:stato}).
-  \item \textbf{Privacy e GDPR.} Trattando dati sanitari di minori, l'intera pipeline transita
-        esclusivamente all'interno della rete Wi-Fi domestica e su un broker/stack \textbf{locale},
-        senza server o broker cloud pubblici esterni.
-\end{itemize}
-
 % =====================================================================
-\section{Pipeline Software Containerizzata e API}
+\section{Pipeline Software Asincrona e Bidirezionale}
 
-L'ESP32 campiona i canali analogici, calcola le metriche locali e modula la trasmissione verso il
-Gateway a frequenza fissa di \textbf{1~Hz}. I dati sono strutturati in un payload JSON canonico,
-identico tra modalità simulatore e sensore reale e tra trasporto MQTT e BLE:
+L'ESP32 utilizza una macchina a stati asincrona per garantire continuit\`a medica anche in assenza di rete. La trasmissione wireless impiega il protocollo \textbf{MQTT}. Il sistema pubblica la telemetria e, simultaneamente, \`e \textbf{in ascolto} per le configurazioni.
+
+\subsection{Modello Dati (Payload)}
+Il payload canonico JSON trasmesso sul topic \texttt{alvea/devices/\{ID\}/telemetry} \`e strutturato come segue:
 
 \begin{verbatim}
 {
-  "device_id": "ALVEA_04",
+  "device_id": "ALVEA_ASTHMA_ANKLE_01",
   "timestamp": 1733740000.0,
-  "bpm": 121.0,
-  "temperature": 36.6,
+  "bpm": 95.0,
+  "respiration_rate": 22.0,
+  "skin_temperature": 32.5,
   "sensor_contact": true,
-  "source": "sim"
+  "device_status": "SYSTEM_OK",
+  "source": "production_firmware"
 }
 \end{verbatim}
 
-La trasmissione wireless impiega il protocollo \textbf{MQTT} pubblicando sul topic
-\texttt{alvea/data} verso il broker locale \textbf{Eclipse Mosquitto}. L'infrastruttura
-è orchestrata via \texttt{docker-compose.yml} e include i microservizi: \textbf{Mosquitto} (broker),
-\textbf{Node-RED} (elaborazione di flusso), \textbf{InfluxDB v2} (time-series database),
-\textbf{Grafana} (layer analitico) e \textbf{backend FastAPI} (API applicativa, persistenza
-relazionale e realtime).
-
-\subsection{Flusso di elaborazione Node-RED}
-Il flow Node-RED \texttt{Alvea} sottoscrive il topic \texttt{alvea/data},
-effettua il parsing JSON, valuta le soglie cliniche e \textbf{(i)} scrive le serie temporali su
-InfluxDB v2 via HTTP API (line protocol, measurement \texttt{vitals}) e \textbf{(ii)} pubblica gli
-eventuali allarmi sul topic \texttt{alvea/alerts}. Grafana espone la dashboard
-\textbf{Alvea} provisionata automaticamente.
-
-\subsection{API REST del backend FastAPI}
-Il backend applicativo è realizzato in \textbf{FastAPI} con autenticazione \textbf{JWT} e
-persistenza su database relazionale (SQLite via SQLAlchemy asincrono). Gli endpoint effettivamente
-implementati sono i seguenti; nessun client interroga direttamente InfluxDB o il broker MQTT.
-
-\begin{table}[h]
-\centering
-\small
-\begin{tabularx}{\textwidth}{@{}llY@{}}
-\toprule
-\textbf{Metodo} & \textbf{Endpoint} & \textbf{Descrizione} \\
-\midrule
-POST & \texttt{/register} & Registrazione di un account caregiver. \\
-POST & \texttt{/login}    & Autenticazione e rilascio di un token JWT (OAuth2 password flow). \\
-POST & \texttt{/devices}  & Associazione di una fascia (\texttt{device\_id}) al caregiver autenticato. \\
-GET  & \texttt{/devices}  & Elenco dei device di proprietà del caregiver. \\
-GET  & \texttt{/devices/\{id\}/latest}   & Ultima lettura di telemetria del device. \\
-GET  & \texttt{/devices/\{id\}/readings} & Storico delle ultime letture (parametro \texttt{limit}). \\
-GET  & \texttt{/devices/\{id\}/alerts}   & Storico degli allarmi generati per il device. \\
-WS   & \texttt{/ws/live}  & Canale WebSocket per la telemetria realtime verso l'app. \\
-GET  & \texttt{/sse/live} & Stream Server-Sent Events alternativo al WebSocket. \\
-\bottomrule
-\end{tabularx}
-\caption*{\footnotesize Tutti gli endpoint sotto \texttt{/devices} richiedono un token JWT valido e
-restituiscono esclusivamente i dati di competenza del caregiver autenticato.}
-\end{table}
-
-L'endpoint amministrativo per la modifica dinamica delle soglie cliniche
-(\texttt{POST /medical/thresholds}) e le rotte storiche dedicate al profilo medico sono
-\textbf{previste a livello di design} (Sezione~\ref{sec:stato}).
+\subsection{Configurazione Remota dal Medico}
+Il microcontrollore sottoscrive al momento dell'avvio il topic \texttt{alvea/devices/\{ID\}/commands}. Quando il medico altera i parametri (es. \texttt{\{"publish\_period\_s": 5\}}) dalla dashboard, l'ESP32 intercetta il messaggio via callback e aggiorna la frequenza di trasmissione in memoria a runtime, senza necessit\`a di riavvio.
 
 % =====================================================================
 \section{Ruoli, Autenticazione e Multitenancy}
 
-Per garantire l'integrità dei dati sanitari, l'architettura adotta un controllo degli accessi:
-ogni transazione applicativa passa attraverso il backend, che valida il token e garantisce che
-ciascun caregiver visualizzi esclusivamente i dati dei propri device. Il modello dati relazionale
-è strutturato come \textbf{Caregiver} 1--N \textbf{Device} 1--N \{\textbf{Reading}, \textbf{Alert}\}.
+Il sistema implementa rigorose politiche di autorizzazione (Role-Based Access Control - RBAC) tramite token \textbf{JWT}. Il database relazionale SQLite traccia l'entit\`a \texttt{USER} definendo due ruoli distinti:
 
-\subsection{Separazione dei ruoli}
 \begin{itemize}[leftmargin=1.3em,itemsep=2pt]
-  \item \textbf{Caregiver / Genitore (implementato).} Accede tramite l'app mobile (React Native /
-        Expo) con login JWT, registra il proprio device, monitora la telemetria realtime (1~Hz via
-        WebSocket/SSE) e consulta lo storico di letture e allarmi.
-  \item \textbf{Medico Pediatra (progettato).} Profilo asimmetrico con visibilità aggregata sui
-        neonati assegnati, dashboard Grafana dedicata, query storiche pre-filtrate e aggiornamento
-        remoto dei parametri clinici. Lo stato di implementazione è dettagliato nella
-        Sezione~\ref{sec:stato}.
+  \item \textbf{Paziente / Caregiver.} Accede all'App mobile (React Native), visualizzando \emph{esclusivamente} la telemetria e gli alert del proprio bambino. Riceve notifiche realtime via WebSocket/SSE.
+  \item \textbf{Medico Pediatra.} Accede all'intera infrastruttura, supervisiona molteplici dispositivi, consulta i grafici storici avanzati su \textbf{Grafana} e pu\`o gestire la configurazione remota dei device. Ha accesso in lettura/scrittura alla \textbf{Scheda Anamnestica} del paziente (patologie, allergie, terapie cortisoniche).
 \end{itemize}
 
-\subsection{Scheda anamnestica e audit log (progettati)}
-Il design prevede due moduli di sicurezza gestiti centralmente: una \textbf{scheda anamnestica}
-che accoppia \texttt{device\_id} e profilo clinico del neonato, e un \textbf{audit log} immutabile
-che traccia ogni accesso ai dati storici e ogni modifica alle soglie (timestamp, operatore,
-variazione applicata).
-
 % =====================================================================
-\section{Soglie Cliniche per Età e Allerta Multi-Livello}
+\section{Soglie Cliniche per l'Asma Pediatrico}
 
-L'obiettivo del motore decisionale è azzerare i falsi negativi strutturando una sorveglianza
-personalizzata. Le soglie fisiologiche di riferimento sono modellate sugli standard clinici
-internazionali (WHO, AAP, NICE) e sulla letteratura sui range pediatrici per età~[\ref{ref:fleming}].
+Il motore decisionale (implementato in Node-RED) valuta i pacchetti in arrivo e genera alert per la prevenzione e la gestione dell'attacco d'asma, basandosi su protocolli pediatrici.
 
-\subsection{Matrice fisiologica delle soglie per età (design)}
 \begin{table}[h]
 \centering
 \small
 \begin{tabularx}{\textwidth}{@{}Yccc@{}}
 \toprule
-\textbf{Fascia d'età} & \textbf{BPM nominale} & \textbf{Bradicardia} & \textbf{Tachicardia} \\
+\textbf{Parametro Clinico} & \textbf{Normale (Nominale)} & \textbf{Warning (Lieve anomalia)} & \textbf{Critical (Crisi Asmatica)} \\
 \midrule
-Neonato (0--28 giorni) & 100--160 BPM & $<$90 BPM & $>$170 BPM \\
-Infante (1--12 mesi)   & 90--140 BPM  & $<$80 BPM & $>$150 BPM \\
+\textbf{Frequenza Respiratoria (EDR)} & 20 -- 30 atti/min & 31 -- 40 atti/min & $> 40$ atti/min (Tachipnea) \\
+\textbf{BPM (Cardiaca)} & 60 -- 120 BPM & $<60$ o $>120$ BPM & $\leq 50$ o $\geq 160$ BPM \\
+\textbf{Temperatura cutanea} & $< 35\,^\circ$C & 35 -- 38\,$^\circ$C & $> 38\,^\circ$C (Febbre) \\
 \bottomrule
 \end{tabularx}
-\caption*{\footnotesize Valori di riferimento (a riposo/sonno) derivati da WHO, AAP e dalla revisione
-sistematica di Fleming et al.~[\ref{ref:fleming}]. I limiti termici seguono i criteri di
-inquadramento della febbre pediatrica (NICE NG143, SIP).}
+\caption*{\footnotesize Valori di riferimento tarati per la fascia di et\`a pediatrica. La concomitanza di tachipnea e tachicardia segnala un'esacerbazione asmatica severa.}
 \end{table}
 
-\subsection{Soglie effettivamente implementate (prototipo)}
-La versione corrente del firmware e del backend applica \textbf{soglie statiche} (non ancora
-parametrizzate per età), coerenti tra backend FastAPI e flow Node-RED:
-\begin{itemize}[leftmargin=1.3em,itemsep=1pt]
-  \item BPM: warning $<$100 o $>$140; critico $\leq$80 o $\geq$170.
-  \item Temperatura: warning $<$36.0 o $>$37.2~$^\circ$C; critico $\leq$35.0 o $\geq$38.5~$^\circ$C.
-  \item Distacco fascia: allarme tecnico dopo un \emph{debounce} di 5~secondi consecutivi.
-\end{itemize}
-
-\subsection{Classificazione dei codici di allerta (design)}
-Il design prevede quattro categorie di gravità crescente che governano routing delle notifiche e
-canali di comunicazione:
-
-\begin{table}[h]
-\centering
-\small
-\begin{tabularx}{\textwidth}{@{}lYY@{}}
-\toprule
-\textbf{Codice} & \textbf{Condizione trigger} & \textbf{Routing notifiche / azioni} \\
-\midrule
-\textbf{Verde}   & Parametri entro gli intervalli di riferimento per l'età. & Monitoraggio silenzioso, storicizzazione su InfluxDB. \\
-\textbf{Giallo}  & \texttt{sensor\_contact = false} oppure assenza dati (watchdog). & Inibizione degli allarmi medici (anti-panico) e notifica tecnica al caregiver. \\
-\textbf{Arancio} & Stato febbrile moderato o lieve scostamento BPM persistente. & Notifica di allerta medica al caregiver e segnale visivo sulla dashboard. \\
-\textbf{Rosso}   & Iperpiressia critica o bradicardia severa persistente. & Escalation massima: notifica urgente, allarme acustico e alert telematico (webhook) al pediatra. \\
-\bottomrule
-\end{tabularx}
-\end{table}
-
-Nel prototipo attuale la classificazione è semplificata a \textbf{tre severità}
-(\texttt{technical}, \texttt{warning}, \texttt{critical}); la mappatura completa a quattro codici
-con escalation e webhook è in stato di design (Sezione~\ref{sec:stato}).
-
-\subsection{Algoritmo anti-panico e watchdog}
-\begin{itemize}[leftmargin=1.3em,itemsep=2pt]
-  \item \textbf{Validazione dell'aderenza (implementato).} Quando il flag \texttt{sensor\_contact}
-        transita a \texttt{false}, il backend \emph{salta la valutazione fisiologica} ed emette un
-        allarme esclusivamente tecnico, evitando che letture nulle di BPM scatenino falsi allarmi
-        di arresto cardiaco.
-  \item \textbf{Watchdog assenza dati (progettato).} È previsto un nodo di timeout che, in caso di
-        interruzione della trasmissione oltre una soglia temporale (target: 10~s), forza lo stato di
-        allerta e notifica l'interruzione del monitoraggio.
-\end{itemize}
+Inoltre, il sistema implementa un algoritmo \textbf{anti-panico}: se il \texttt{device\_status} differisce da \texttt{SYSTEM\_OK} (es. cavigliera sganciata), la pipeline \emph{inibisce} la generazione di allarmi medici, producendo esclusivamente un alert \textbf{Tecnico}.
 
 % =====================================================================
 \section{Stato di Implementazione}\label{sec:stato}
 
-Per trasparenza accademica, la tabella seguente distingue ciò che è \IMPL{} nel repository da ciò
-che è \PLAN{} a livello di specifica. Tutti i riferimenti sono verificabili nel codice sorgente.
+La tabella seguente distingue ci\`o che \`e \IMPL{} nel repository sorgente da ci\`o che \`e \PLAN{} a livello di architettura espansa.
 
 \begin{table}[h]
 \centering
 \small
 \begin{tabularx}{\textwidth}{@{}Ylc@{}}
 \toprule
-\textbf{Funzionalità} & \textbf{Riferimento nel repo} & \textbf{Stato} \\
+\textbf{Funzionalit\`a} & \textbf{Riferimento nel repo} & \textbf{Stato} \\
 \midrule
-Acquisizione ECG AD8232 + stima BPM (Pan--Tompkins) & \texttt{firmware/sensor\_ecg.py} & \IMPL \\
-Simulatore di telemetria fisiologica & \texttt{firmware/sensor\_sim.py} & \IMPL \\
-Sensore temperatura (stub / NTC / DS18B20) & \texttt{firmware/sensor\_temp.py} & \IMPL \\
-Trasmissione MQTT a 1~Hz + payload JSON canonico & \texttt{firmware/transport\_mqtt.py} & \IMPL \\
-Trasporto alternativo BLE & \texttt{firmware/transport\_ble.py} & \IMPL \\
-Stack Docker (Mosquitto, InfluxDB, Grafana, Node-RED, backend) & \texttt{docker-stack/} & \IMPL \\
-Flow Node-RED: soglie $\rightarrow$ InfluxDB + alert MQTT & \texttt{docker-stack/nodered/} & \IMPL \\
-Dashboard Grafana provisionata & \texttt{docker-stack/grafana/} & \IMPL \\
-Backend FastAPI + autenticazione JWT & \texttt{backend/app/} & \IMPL \\
-CRUD device e storico letture/alert (REST) & \texttt{backend/app/main.py} & \IMPL \\
-Realtime via WebSocket e SSE & \texttt{backend/app/realtime.py} & \IMPL \\
-App mobile (login + monitor realtime) & \texttt{mobile/} & \IMPL \\
-Soglie statiche su 3 severità & \texttt{backend/app/alerts.py} & \IMPL \\
+EDR: frequenza respiratoria stimata dall'ECG (IIR) & \texttt{firmware/sensor\_ecg.py} & \IMPL \\
+Acquisizione ECG con Ring Buffer Statici (Pan-Tompkins) & \texttt{firmware/sensor\_ecg.py} & \IMPL \\
+Macchina a stati MQTT asincrona + ricezione Comandi & \texttt{firmware/main\_real\_mqtt.py} & \IMPL \\
+Payload telemetrico asma pediatrico (Resp, BPM, Temp) & \texttt{firmware/sensor\_sim.py} & \IMPL \\
+Script di simulazione PC (HIL Test: scenari \emph{asthma\_attack}) & \texttt{scripts/publish\_test.py} & \IMPL \\
+Stack Server (Mosquitto, InfluxDB, Grafana, Node-RED) & \texttt{docker-stack/} & \IMPL \\
+Autenticazione JWT multi-ruolo (RBAC: Medico/Paziente) & \texttt{backend/app/} & \IMPL \\
+Scheda anamnestica paziente + Audit Log & \texttt{backend/app/} & \IMPL \\
+Soglie dinamiche personalizzate per paziente & \texttt{backend/app/} & \IMPL \\
+Notifiche push Expo (critiche) + realtime WebSocket & \texttt{backend/app/push.py}, \texttt{mobile/} & \IMPL \\
+Realtime via WebSocket verso l'App & \texttt{backend/app/realtime.py} & \IMPL \\
 \midrule
-Soglie dinamiche parametrizzate per età & --- & \PLAN \\
-4 codici allerta (Verde/Giallo/Arancio/Rosso) + escalation & --- & \PLAN \\
-Ruolo Medico, RBAC e dashboard Grafana per-medico & --- & \PLAN \\
-Scheda anamnestica e audit log immutabile & --- & \PLAN \\
-Notifiche push e webhook al pediatra & --- & \PLAN \\
-Watchdog assenza dati $>$10~s & --- & \PLAN \\
-Ottimizzazione energetica (light sleep ESP32) & --- & \PLAN \\
+Watchdog assenza dati $>$10~s (Node-RED) & --- & \PLAN \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -367,38 +205,11 @@ Ottimizzazione energetica (light sleep ESP32) & --- & \PLAN \\
 % =====================================================================
 \section{Riferimenti Medici e Fonti Istituzionali}
 
-Le soglie fisiologiche, la differenziazione per età e la classificazione dei livelli di urgenza
-sono modellate in conformità con la letteratura scientifica e le linee guida internazionali
-correnti. Tutti i collegamenti seguenti rimandano a fonti ufficiali e sono cliccabili.
-
 \begin{enumerate}[leftmargin=2em,itemsep=4pt,label={[\arabic*]}]
-  \item \label{ref:who} World Health Organization (WHO). \textit{Pocket Book of Hospital Care for
-        Children: Guidelines for the Management of Common Childhood Illnesses}, 2\textsuperscript{a}
-        ed., 2013. Disponibile su:
-        \url{https://www.who.int/publications/i/item/978-92-4-154837-3}
-        (repository IRIS: \url{https://apps.who.int/iris/handle/10665/81170}).
-
-  \item \label{ref:fleming} Fleming S., Thompson M., Stevens R., et al. \textit{Normal ranges of
-        heart rate and respiratory rate in children from birth to 18 years of age: a systematic
-        review of observational studies}. The Lancet, 2011; 377(9770): 1011--1018.
-        DOI: \href{https://doi.org/10.1016/S0140-6736(10)62226-X}{10.1016/S0140-6736(10)62226-X}.
-        Testo integrale: \url{https://pmc.ncbi.nlm.nih.gov/articles/PMC3789232/}.
-
-  \item \label{ref:aap} American Academy of Pediatrics (AAP). Standard clinici sui parametri vitali
-        pediatrici e sulla stratificazione del rischio cardio-respiratorio. AAP Publications:
-        \url{https://publications.aap.org/} -- portale per le famiglie:
-        \url{https://www.healthychildren.org/}.
-
-  \item \label{ref:nice} National Institute for Health and Care Excellence (NICE). \textit{Fever in
-        under 5s: assessment and initial management} (NG143) -- sistema a semaforo
-        (\emph{Traffic Light System}) per la classificazione della febbre acuta, alla base dei
-        codici Arancio e Rosso. Disponibile su:
-        \url{https://www.nice.org.uk/guidance/ng143}.
-
-  \item \label{ref:sip} Società Italiana di Pediatria (SIP) / SIPEC. \textit{Gestione del
-        segno/sintomo febbre in pediatria} -- linee guida nazionali. Disponibile su:
-        \url{https://sipec.pediatria.it/gestione-del-segnosintomo-febbre-in-pediatria/}
-        (sito istituzionale SIP: \url{https://sip.it/}).
+  \item \label{ref:gina} Global Initiative for Asthma (GINA). \textit{Global Strategy for Asthma Management and Prevention}, 2023. Disponibile su: \url{https://ginasthma.org/}.
+  \item \label{ref:who} World Health Organization (WHO). \textit{Pocket Book of Hospital Care for Children}, 2\textsuperscript{a} ed., 2013.
+  \item \label{ref:fleming} Fleming S., et al. \textit{Normal ranges of heart rate and respiratory rate in children from birth to 18 years of age}. The Lancet, 2011; 377(9770): 1011--1018.
+  \item \label{ref:nice} National Institute for Health and Care Excellence (NICE). \textit{Asthma: diagnosis, monitoring and chronic asthma management} (NG80).
 \end{enumerate}
 
 \vfill

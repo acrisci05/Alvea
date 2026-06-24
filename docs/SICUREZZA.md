@@ -3,17 +3,15 @@
 **Alvea è un progetto didattico, NON un dispositivo medico.**
 
 - Non è certificato e **non deve essere usato** per decisioni sulla salute di un
-  neonato o di alcuna persona. Non sostituisce la sorveglianza di un adulto né
-  un dispositivo medico approvato.
-- I valori, le soglie e gli allarmi hanno scopo **dimostrativo** (laboratorio).
-- **Alimentazione:** solo tramite USB del PC o power bank a bassa tensione (3.3–5 V).
+  bambino o di alcuna persona. Non sostituisce la sorveglianza di un adulto né
+  un dispositivo medico approvato (es. saturimetro clinico).
+- I valori, le soglie per l'asma (frequenza respiratoria, battito) e gli allarmi hanno scopo **dimostrativo** (laboratorio).
+- **Alimentazione:** usare solo alimentazione a batteria (singola cella LiPo) o power bank a bassa tensione (3.3–5 V).
   Non collegare mai l'elettronica indossata alla rete elettrica 220 V.
-- **AD8232 / elettrodi:** uso a scopo di esperimento su soggetti adulti
-  consenzienti e in salute. Non utilizzare su persone con pacemaker o altri
-  dispositivi impiantati. Non applicare a neonati reali.
-- **Privacy (RQ-20):** le credenziali Wi-Fi stanno in `secrets.py`, escluso dal
-  repository. Tutto il traffico resta nella rete locale: nessun dato sanitario
-  viene inviato a servizi esterni o in cloud.
+- **Sensori (ECG AD8232, termistore NTC):** uso a scopo di esperimento su soggetti
+  consenzienti e in salute. Non utilizzare elettrodi ECG su persone con pacemaker o altri
+  dispositivi impiantati. Non applicare il prototipo hardware a pazienti pediatrici reali.
+- **Privacy (RQ-20):** le credenziali Wi-Fi risiedono in `secrets.py`, mentre le variabili d'ambiente del server in `.env`. Entrambi i file sono esclusi dal repository pubblico. Tutto il traffico clinico transita nella rete locale: nessun dato sanitario viene inviato a servizi cloud pubblici di terze parti.
 
 ---
 
@@ -53,22 +51,24 @@ Questo garantisce il requisito *"ogni utente visualizza esclusivamente i propri 
 ## Gestione alert (core)
 
 Ogni allarme generato (`backend/app/alerts.py`) contiene i campi richiesti:
-**paziente** (`device_id`), **parametro** (`bpm` | `temperature` | `contact`),
-**descrizione** (`message`), **livello di gravità** (`severity`:
-`warning` | `critical` | `technical`) e **timestamp** (`ts`).
-Regola d'oro: con fascia staccata si emette solo un allarme **tecnico**, mai
-allarmi fisiologici (eviterebbe falsi positivi).
+**paziente** (`device_id`), **parametro** (`respiration_rate` | `bpm` |
+`skin_temperature` | `contact`), **descrizione** (`message`), **livello di
+gravità** (`severity`: `warning` | `critical` | `technical`) e **timestamp** (`ts`).
+Regola d'oro: con sensore staccato (o `device_status` di errore) si emette solo
+un allarme **tecnico**, mai allarmi fisiologici (eviterebbe falsi positivi).
+Condizioni cliniche rilevate: **tachipnea** (frequenza respiratoria alta, da EDR),
+**tachicardia/bradicardia** (BPM) e **febbre** (temperatura cutanea alta).
 
 ## Soglie configurabili dal medico
 
 Le soglie cliniche sono per-device (`DeviceThreshold`) e modificabili solo dal
 medico via `PUT /devices/{id}/thresholds`. In assenza di una configurazione
-dedicata si usano i default di `config.DEFAULT_THRESHOLDS`. La pipeline MQTT
+deicata si usano i default di `config.DEFAULT_THRESHOLDS`. La pipeline MQTT
 applica automaticamente le soglie del device in fase di valutazione.
 
 ## Scheda paziente e anamnesi
 
-`GET/PUT /devices/{id}/patient` gestiscono la scheda del neonato: dati
+`GET/PUT /devices/{id}/patient` gestiscono la scheda del paziente (bambino): dati
 anagrafici più informazioni cliniche (**patologie note**, **farmaci**,
 **allergie**). Accessibile al proprietario e al medico.
 
