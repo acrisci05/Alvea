@@ -31,11 +31,11 @@ class Caregiver(Base):
 
 
 class Device(Base):
-    """La fascia indossabile associata a un neonato."""
+    """Il dispositivo indossabile (caviglia) associato a un paziente."""
     __tablename__ = "devices"
     id = Column(Integer, primary_key=True, index=True)
-    device_id = Column(String, unique=True, index=True, nullable=False)  # es. ALVEA_04
-    baby_name = Column(String, nullable=True)
+    device_id = Column(String, unique=True, index=True, nullable=False)  # es. ALVEA_ASTHMA_ANKLE_01
+    baby_name = Column(String, nullable=True)   # nome/etichetta del paziente
     owner_id = Column(Integer, ForeignKey("caregivers.id"))
     owner = relationship("Caregiver", back_populates="devices")
     readings = relationship("Reading", back_populates="device")
@@ -43,15 +43,17 @@ class Device(Base):
 
 
 class Reading(Base):
-    """Singola lettura di telemetria (1 Hz)."""
+    """Singola lettura di telemetria (1 Hz) — parametri per l'asma pediatrico."""
     __tablename__ = "readings"
     id = Column(Integer, primary_key=True, index=True)
     device_id = Column(String, ForeignKey("devices.device_id"), index=True)
     ts = Column(DateTime, default=datetime.utcnow, index=True)
-    bpm = Column(Float)
-    temperature = Column(Float)
+    bpm = Column(Float)                   # frequenza cardiaca (ECG)
+    respiration_rate = Column(Float)      # atti respiratori al minuto (EDR da ECG)
+    skin_temperature = Column(Float)      # temperatura cutanea (°C, termistore NTC)
     sensor_contact = Column(Boolean)
-    source = Column(String, nullable=True)         # "sim" | "ad8232"
+    device_status = Column(String, nullable=True)  # "SYSTEM_OK" | "ERR_..."
+    source = Column(String, nullable=True)         # "sim-pc-script" | "production_firmware"
     device = relationship("Device", back_populates="readings")
 
 
@@ -66,8 +68,8 @@ class Alert(Base):
     id = Column(Integer, primary_key=True, index=True)
     device_id = Column(String, ForeignKey("devices.device_id"), index=True)  # paziente
     ts = Column(DateTime, default=datetime.utcnow, index=True)               # timestamp
-    parameter = Column(String, nullable=True)  # "bpm" | "temperature" | "contact"
-    kind = Column(String)          # "bpm_high" | "bpm_low" | "temp_high" | ...
+    parameter = Column(String, nullable=True)  # "respiration_rate"|"bpm"|"skin_temperature"|"contact"
+    kind = Column(String)          # "resp_high" | "bpm_high" | "bpm_low" | "temp_high" | ...
     severity = Column(String)      # "warning" | "critical" | "technical"
     message = Column(String)       # descrizione leggibile
     value = Column(Float, nullable=True)
@@ -82,27 +84,27 @@ class DeviceThreshold(Base):
     """
     __tablename__ = "device_thresholds"
     device_id = Column(String, ForeignKey("devices.device_id"), primary_key=True)
+    resp_warn_high = Column(Float, nullable=False)
+    resp_crit_high = Column(Float, nullable=False)
     bpm_warn_low = Column(Integer, nullable=False)
     bpm_warn_high = Column(Integer, nullable=False)
     bpm_crit_low = Column(Integer, nullable=False)
     bpm_crit_high = Column(Integer, nullable=False)
-    temp_warn_low = Column(Float, nullable=False)
-    temp_warn_high = Column(Float, nullable=False)
-    temp_crit_low = Column(Float, nullable=False)
-    temp_crit_high = Column(Float, nullable=False)
+    skin_temp_warn_high = Column(Float, nullable=False)
+    skin_temp_crit_high = Column(Float, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     updated_by = Column(String, nullable=True)
 
 
 class PatientRecord(Base):
-    """Scheda paziente e anamnesi del neonato associato al device.
+    """Scheda paziente e anamnesi del bambino associato al device.
 
     Dati anagrafici di base più le informazioni cliniche richieste dal
     requisito (patologie note, farmaci, allergie).
     """
     __tablename__ = "patient_records"
     device_id = Column(String, ForeignKey("devices.device_id"), primary_key=True)
-    full_name = Column(String, nullable=True)     # nome del neonato
+    full_name = Column(String, nullable=True)     # nome del paziente
     birth_date = Column(String, nullable=True)    # data di nascita (ISO yyyy-mm-dd)
     sex = Column(String, nullable=True)           # "M" | "F" | "-"
     weight_kg = Column(Float, nullable=True)
@@ -131,3 +133,15 @@ class AuditLog(Base):
     resource = Column(String, nullable=True)       # es. device_id interessato
     detail = Column(String, nullable=True)         # dettaglio leggibile
     ip = Column(String, nullable=True)
+
+
+class PushToken(Base):
+    """Expo push token registrato da un'app mobile per ricevere le notifiche.
+
+    Associato al caregiver: gli allarmi critici di un device vengono notificati
+    ai token del suo proprietario.
+    """
+    __tablename__ = "push_tokens"
+    token = Column(String, primary_key=True)
+    owner_id = Column(Integer, ForeignKey("caregivers.id"), index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)

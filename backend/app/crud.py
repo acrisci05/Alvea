@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import desc
 
-from . import models, schemas, auth
+from . import models, schemas, auth, config
 
 
 # --- Caregiver ---
@@ -60,8 +60,10 @@ async def save_reading(db: AsyncSession, r: dict):
     reading = models.Reading(
         device_id=r["device_id"],
         bpm=r.get("bpm"),
-        temperature=r.get("temperature"),
+        respiration_rate=r.get("respiration_rate"),
+        skin_temperature=r.get("skin_temperature"),
         sensor_contact=r.get("sensor_contact"),
+        device_status=r.get("device_status"),
         source=r.get("source"),
     )
     db.add(reading)
@@ -110,8 +112,9 @@ async def get_recent_alerts(db: AsyncSession, device_id: str, limit: int = 50):
 
 # --- Soglie per-device (configurabili dal medico) ---
 _THRESHOLD_FIELDS = (
+    "resp_warn_high", "resp_crit_high",
     "bpm_warn_low", "bpm_warn_high", "bpm_crit_low", "bpm_crit_high",
-    "temp_warn_low", "temp_warn_high", "temp_crit_low", "temp_crit_high",
+    "skin_temp_warn_high", "skin_temp_crit_high",
 )
 
 async def get_threshold_row(db: AsyncSession, device_id: str):
@@ -178,3 +181,19 @@ async def get_audit_logs(db: AsyncSession, limit: int = 100, device_id: str | No
     q = q.order_by(desc(models.AuditLog.ts)).limit(limit)
     res = await db.execute(q)
     return res.scalars().all()
+
+
+# --- Push token ---
+async def register_push_token(db: AsyncSession, token: str, owner_id: int):
+    existing = await db.get(models.PushToken, token)
+    if existing:
+        existing.owner_id = owner_id
+    else:
+        db.add(models.PushToken(token=token, owner_id=owner_id))
+    await db.commit()
+
+async def get_push_tokens_for_owner(db: AsyncSession, owner_id: int):
+    res = await db.execute(
+        select(models.PushToken.token).where(models.PushToken.owner_id == owner_id)
+    )
+    return [row[0] for row in res.all()]

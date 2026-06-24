@@ -39,12 +39,14 @@ class DeviceResponse(BaseModel):
 
 # --- Telemetria / Letture ---
 class ReadingIn(BaseModel):
-    """Payload prodotto dall'ESP32 (sim o reale)."""
+    """Payload prodotto dall'ESP32 (sim o reale) — asma pediatrico."""
     device_id: str
     timestamp: Optional[float] = None
     bpm: float
-    temperature: float
+    respiration_rate: float
+    skin_temperature: float
     sensor_contact: bool
+    device_status: Optional[str] = "SYSTEM_OK"
     source: Optional[str] = None
 
 class ReadingResponse(BaseModel):
@@ -52,8 +54,10 @@ class ReadingResponse(BaseModel):
     device_id: str
     ts: datetime
     bpm: float
-    temperature: float
+    respiration_rate: float
+    skin_temperature: float
     sensor_contact: bool
+    device_status: Optional[str]
     source: Optional[str]
     class Config:
         from_attributes = True
@@ -64,7 +68,7 @@ class AlertResponse(BaseModel):
     id: int
     device_id: str           # paziente
     ts: datetime             # timestamp
-    parameter: Optional[str] # parametro: bpm | temperature | contact
+    parameter: Optional[str] # respiration_rate | bpm | skin_temperature | contact
     kind: str
     severity: str            # livello di gravità
     message: str             # descrizione
@@ -75,22 +79,26 @@ class AlertResponse(BaseModel):
 
 # --- Soglie cliniche per-device (configurabili dal medico) ---
 class ThresholdConfig(BaseModel):
+    resp_warn_high: float
+    resp_crit_high: float
     bpm_warn_low: int
     bpm_warn_high: int
     bpm_crit_low: int
     bpm_crit_high: int
-    temp_warn_low: float
-    temp_warn_high: float
-    temp_crit_low: float
-    temp_crit_high: float
+    skin_temp_warn_high: float
+    skin_temp_crit_high: float
 
     @model_validator(mode="after")
     def _check_order(self):
-        # Le soglie devono essere coerenti: crit_low < warn_low < warn_high < crit_high.
+        # Respiro: warn_high <= crit_high (più alta è peggio).
+        if not (self.resp_warn_high <= self.resp_crit_high):
+            raise ValueError("Soglie respiro incoerenti: atteso warn_high <= crit_high")
+        # BPM: crit_low < warn_low < warn_high < crit_high.
         if not (self.bpm_crit_low < self.bpm_warn_low < self.bpm_warn_high < self.bpm_crit_high):
             raise ValueError("Soglie BPM incoerenti: atteso crit_low < warn_low < warn_high < crit_high")
-        if not (self.temp_crit_low < self.temp_warn_low < self.temp_warn_high < self.temp_crit_high):
-            raise ValueError("Soglie temperatura incoerenti: atteso crit_low < warn_low < warn_high < crit_high")
+        # Temp. cutanea: warn_high <= crit_high (febbre).
+        if not (self.skin_temp_warn_high <= self.skin_temp_crit_high):
+            raise ValueError("Soglie temperatura incoerenti: atteso warn_high <= crit_high")
         return self
 
 class ThresholdResponse(ThresholdConfig):
@@ -119,6 +127,11 @@ class PatientRecordResponse(PatientRecordUpdate):
     updated_by: Optional[str] = None
     class Config:
         from_attributes = True
+
+
+# --- Notifiche push ---
+class PushTokenIn(BaseModel):
+    token: str
 
 
 # --- Audit log ---
