@@ -1,56 +1,56 @@
-# sensor_temp.py - Lettura temperatura cutanea (Fase di Produzione).
-# Gestisce gli errori hardware nativamente senza bloccare il firmware.
+# sensor_temp.py - Temperatura cutanea da termistore NTC di precisione.
+#
+# Il sensore è un NTC (Negative Temperature Coefficient) letto su un ingresso
+# ADC tramite partitore di tensione. La conversione resistenza->temperatura usa
+# l'equazione di Steinhart-Hart semplificata (Beta). Gestisce nativamente i
+# guasti (cortocircuito / circuito aperto) restituendo None senza bloccare il
+# firmware, per garantire la qualità del dato (device_status).
 
-import time
+import math
 import machine
 
-TEMP_MODE = "ds18b20"  # In produzione si fissa l'hardware reale: "ds18b20" o "ntc"
-PIN_DS18B20 = 4
-PIN_NTC     = 35       
+# --- Cablaggio e partitore ---
+PIN_NTC    = 35          # ingresso analogico (ADC1) dedicato all'NTC
+R_SERIES   = 10_000.0    # resistenza fissa del partitore (ohm)
+ADC_MAX    = 4095.0      # fondo scala ADC a 12 bit
+
+# --- Parametri del termistore (NTC 10k tipico) ---
+R0   = 10_000.0          # resistenza nominale a T0 (ohm)
+T0_K = 298.15            # 25 °C in kelvin
+BETA = 3950.0            # coefficiente Beta (dal datasheet del componente)
+
 
 class TempSensor:
+    """Lettura della temperatura cutanea da termistore NTC di precisione."""
+
     def __init__(self):
-        self.mode = TEMP_MODE
         self._hardware_ok = False
-        
         try:
-            if self.mode == "ds18b20":
-                import onewire, ds18x20
-                self._bus = ds18x20.DS18X20(onewire.OneWire(machine.Pin(PIN_DS18B20)))
-                self._roms = self._bus.scan()
-                if self._roms:
-                    self._hardware_ok = True
-            elif self.mode == "ntc":
-                self._adc = machine.ADC(machine.Pin(PIN_NTC))
-                self._adc.atten(machine.ADC.ATTN_11DB)
-                self._adc.width(machine.ADC.WIDTH_12BIT)
-                self._hardware_ok = True
+            self._adc = machine.ADC(machine.Pin(PIN_NTC))
+            self._adc.atten(machine.ADC.ATTN_11DB)     # fondo scala ~3.3 V
+            self._adc.width(machine.ADC.WIDTH_12BIT)
+            self._hardware_ok = True
         except Exception as e:
-            print("[HARDWARE ERROR] Errore inizializzazione sensore temperatura:", e)
+            print("[HARDWARE ERROR] Inizializzazione NTC fallita:", e)
             self._hardware_ok = False
 
     def read(self):
-        """
-        Restituisce la temperatura cutanea (31-34 C) o None se guasto.
-        Garantisce la conformita' al requisito sulla qualita' del dato.
-        """
+        """Restituisce la temperatura cutanea in °C (1 decimale) o None se guasto."""
         if not self._hardware_ok:
             return None
-            
         try:
-            if self.mode == "ds18b20":
-                if not self._roms:
-                    return None
-                self._bus.convert_temp()
-                # Nota: in produzione non usiamo time.sleep_ms(750) nel thread principale.
-                # Assumiamo una lettura asincrona o un sensore pre-convertito.
-                return round(self._bus.read_temp(self._roms[0]), 1)
+            raw = self._adc.read()
+            # Cortocircuito (0) o circuito aperto (fondo scala): dato non valido.
+            if raw <= 0 or raw >= ADC_MAX:
+                return None
 
-            if self.mode == "ntc":
-                raw = self._adc.read()
-                if raw == 0 or raw == 4095: # Cortocircuito o circuito aperto
-                    return None
-                return round(30.0 + (raw / 4095.0) * 5.0, 1)
-                
+            # Partitore: 3V3 -- R_SERIES -- [ADC] -- NTC -- GND
+            # raw/ADC_MAX = R_ntc / (R_SERIES + R_ntc)  ->  R_ntc = R_SERIES * raw/(ADC_MAX-raw)
+            r_ntc = R_SERIES * (raw / (ADC_MAX - raw))
+
+            # Equazione Beta: 1/T = 1/T0 + (1/BETA) * ln(R/R0)
+            inv_t = (1.0 / T0_K) + (1.0 / BETA) * math.log(r_ntc / R0)
+            temp_c = (1.0 / inv_t) - 273.15
+            return round(temp_c, 1)
         except Exception:
             return None

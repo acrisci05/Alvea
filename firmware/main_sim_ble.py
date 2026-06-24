@@ -5,14 +5,14 @@ import config
 from sensor_sim import SimSensor
 from transport_ble import BLEPeripheral
 
-print("== AsthmaGuard TEST-RIG :: SIMULATORE BLE ASINCRONO ==")
+print("== Alvea TEST-RIG :: SIMULATORE BLE ASINCRONO ==")
 ble = BLEPeripheral()
 sensor = SimSensor()
 
 last_pub = time.time()
 
 while True:
-    if time.time() - last_pub >= config.PUBLISH_PERIOD_S:
+    if time.time() - last_pub >= config.DEFAULT_PUBLISH_PERIOD_S:
         last_pub = time.time()
         
         reading = sensor.read()

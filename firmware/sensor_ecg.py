@@ -22,6 +22,17 @@ MAX_PEAKS_IN_WINDOW = 18
 PHYSIO_BPM_MIN      = 40
 PHYSIO_BPM_MAX      = 180
 
+# --- EDR (ECG-Derived Respiration) ---
+# Il respiro modula lentamente la linea di base dell'ECG (baseline wandering).
+# Sotto-campioniamo l'ECG a 25 Hz e isoliamo la componente respiratoria con un
+# filtro IIR passa-basso, poi contiamo gli attraversamenti dello zero.
+EDR_DIVIDER   = 10                          # 250 Hz / 10 = 25 Hz
+EDR_WINDOW_S  = 12
+EDR_BUF_SIZE  = (SAMPLE_RATE_HZ // EDR_DIVIDER) * EDR_WINDOW_S
+EDR_ALPHA     = 0.1                         # taglio ~0.5 Hz: tiene solo il respiro
+PHYSIO_RESP_MIN = 5
+PHYSIO_RESP_MAX = 60
+
 def _median(lst):
     s = sorted(lst)
     n = len(s)
@@ -56,6 +67,10 @@ class ECGMonitor:
         self._prev_v = 0
         self._i = 0
 
+        # EDR: buffer del segnale sotto-campionato per la stima del respiro
+        self._edr_buf = []
+        self._edr_div = 0
+
     def leads_off(self):
         if LEADS_OFF_ACTIVE_HIGH:
             return self.lo_plus.value() == 1 or self.lo_minus.value() == 1
@@ -72,9 +87,19 @@ class ECGMonitor:
         self._last_peak_ms = 0
         self._prev_v = 0
         self._i = 0
+        self._edr_buf = []
+        self._edr_div = 0
 
     def feed(self, v):
         """Alimenta l'algoritmo (250 Hz) senza generare spazzatura in memoria."""
+        # --- EDR: accumulo sotto-campionato (25 Hz) per la stima del respiro ---
+        self._edr_div += 1
+        if self._edr_div >= EDR_DIVIDER:
+            self._edr_div = 0
+            self._edr_buf.append(v)
+            if len(self._edr_buf) > EDR_BUF_SIZE:
+                self._edr_buf.pop(0)
+
         d = v - self._prev_v
         self._prev_v = v
         d_sq = d * d
@@ -152,3 +177,33 @@ class ECGMonitor:
         if not (PHYSIO_BPM_MIN <= bpm <= PHYSIO_BPM_MAX):
             return 0
         return bpm
+
+    def compute_resp_rate(self):
+        """Stima la frequenza respiratoria (atti/min) dall'ECG via EDR.
+
+        Filtra la linea di base sotto-campionata con un IIR passa-basso e conta
+        gli attraversamenti (rising) della media: ogni attraversamento = 1 ciclo
+        respiratorio. Da chiamare a ~1 Hz.
+        """
+        if len(self._edr_buf) < EDR_BUF_SIZE:
+            return 0.0  # finestra in riempimento
+
+        # Filtro IIR passa-basso: isola l'onda respiratoria sopprimendo il QRS
+        filtered = []
+        y_prev = self._edr_buf[0]
+        for x in self._edr_buf:
+            y = EDR_ALPHA * x + (1.0 - EDR_ALPHA) * y_prev
+            filtered.append(y)
+            y_prev = y
+
+        baseline = sum(filtered) / len(filtered)
+
+        crossings = 0
+        for k in range(1, len(filtered)):
+            if (filtered[k - 1] < baseline) and (filtered[k] >= baseline):
+                crossings += 1
+
+        resp = crossings * (60.0 / EDR_WINDOW_S)
+        if not (PHYSIO_RESP_MIN <= resp <= PHYSIO_RESP_MAX):
+            return 0.0
+        return round(resp, 1)

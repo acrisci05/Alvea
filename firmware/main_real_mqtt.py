@@ -8,7 +8,6 @@ from wifi import WiFiManager
 from transport_mqtt import MQTTPublisher
 from sensor_ecg import ECGMonitor, SAMPLE_PERIOD_US
 from sensor_temp import TempSensor
-from sensor_ppg import PPGMonitor
 
 try:
     import secrets
@@ -16,7 +15,7 @@ try:
 except ImportError:
     raise RuntimeError("File secrets.py mancante o corrotto.")
 
-print("=== ASTHMAGUARD PRO: AVVIO ARCHITETTURA DI PRODUZIONE ===")
+print("=== ALVEA PRO: AVVIO ARCHITETTURA DI PRODUZIONE ===")
 
 # --- VARIABILI DI CONFIGURAZIONE DINAMICA (Punto 8) ---
 # Invece di usare una costante bloccata, usiamo una variabile aggiornabile.
@@ -52,11 +51,9 @@ mqtt = MQTTPublisher(message_callback=mqtt_callback)
 # Inizializzazione Sensori Reali
 ecg = ECGMonitor()
 thermo = TempSensor()
-ppg = PPGMonitor()
 
 next_sample = time.ticks_us()
 last_pub = time.time()
-ppg_sample_divider = 0
 
 while True:
     # ------------------------------------------------------------------
@@ -74,12 +71,6 @@ while True:
         ecg.feed(ecg.read_raw())
     else:
         ecg.reset()
-
-    ppg_sample_divider += 1
-    if ppg_sample_divider >= 5:
-        ppg_sample_divider = 0
-        red_raw, ir_raw = ppg.read_raw()
-        ppg.feed(red_raw, ir_raw)
 
     # ------------------------------------------------------------------
     # 3. MACCHINA A STATI DI RETE E ASCOLTO COMANDI
@@ -99,13 +90,10 @@ while True:
     if time.time() - last_pub >= current_publish_period:
         last_pub = time.time()
         
-        contact_ppg = ppg.is_skin_on()
         temp_val = thermo.read()
-        
+
         if not contact_ecg:
             status_string = "ERR_ECG_LEADS_OFF"
-        elif not contact_ppg:
-            status_string = "ERR_PPG_NO_CONTACT"
         elif temp_val is None:
             status_string = "ERR_TEMP_SENSOR_FAULT"
         elif not mqtt.is_connected:
@@ -114,17 +102,16 @@ while True:
             status_string = "SYSTEM_OK"
 
         bpm = ecg.compute_bpm() if contact_ecg else 0
-        spo2, resp_rate = ppg.compute_metrics() if contact_ppg else (0.0, 0.0)
+        resp_rate = ecg.compute_resp_rate() if contact_ecg else 0.0
         final_temp = temp_val if temp_val is not None else 0.0
 
         reading = {
             "device_id": config.DEVICE_ID,
             "timestamp": time.time(),
             "bpm": float(bpm),
-            "skin_temperature": float(final_temp),
-            "spo2": float(spo2),
             "respiration_rate": float(resp_rate),
-            "sensor_contact": (contact_ecg and contact_ppg),
+            "skin_temperature": float(final_temp),
+            "sensor_contact": contact_ecg,
             "device_status": status_string,
             "source": "production_firmware"
         }

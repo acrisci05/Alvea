@@ -13,7 +13,7 @@ try:
 except ImportError:
     raise RuntimeError("File secrets.py mancante.")
 
-print("== AsthmaGuard TEST-RIG :: SIMULATORE MQTT ASINCRONO ==")
+print("== Alvea TEST-RIG :: SIMULATORE MQTT ASINCRONO ==")
 
 wifi_mga = WiFiManager(SSID, PSW)
 mqtt = MQTTPublisher()
@@ -30,7 +30,7 @@ while True:
         mqtt.is_connected = False
 
     # Invio temporizzato ad 1 Hz
-    if time.time() - last_pub >= config.PUBLISH_PERIOD_S:
+    if time.time() - last_pub >= config.DEFAULT_PUBLISH_PERIOD_S:
         last_pub = time.time()
         
         reading = sensor.read()

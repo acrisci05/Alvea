@@ -14,9 +14,8 @@ class SimSensor:
             "device_id": config.DEVICE_ID,
             "timestamp": 0,
             "bpm": 0.0,
-            "skin_temperature": 0.0,
-            "spo2": 0.0,
             "respiration_rate": 0.0,
+            "skin_temperature": 0.0,
             "sensor_contact": True,
             "source": "sim_test_rig"
         }
@@ -30,14 +29,12 @@ class SimSensor:
 
         if self._contact:
             self._payload["bpm"] = round(random.uniform(config.BPM_SIM_MIN, config.BPM_SIM_MAX), 1)
-            self._payload["skin_temperature"] = round(random.uniform(config.TEMP_SKIN_SIM_MIN, config.TEMP_SKIN_SIM_MAX), 1)
-            self._payload["spo2"] = round(random.uniform(config.SPO2_SIM_MIN, config.SPO2_SIM_MAX), 1)
             self._payload["respiration_rate"] = round(random.uniform(config.RESP_RATE_SIM_MIN, config.RESP_RATE_SIM_MAX), 1)
+            self._payload["skin_temperature"] = round(random.uniform(config.TEMP_SKIN_SIM_MIN, config.TEMP_SKIN_SIM_MAX), 1)
         else:
             self._payload["bpm"] = 0.0
-            self._payload["skin_temperature"] = 0.0
-            self._payload["spo2"] = 0.0
             self._payload["respiration_rate"] = 0.0
+            self._payload["skin_temperature"] = 0.0
             print("[SIM WARNING] Caduta di contatto simulata!")
 
         # Restituisce un riferimento al dizionario in memoria
