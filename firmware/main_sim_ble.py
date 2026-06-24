@@ -6,6 +6,7 @@ import config
 from sensor_sim import SimSensor
 from transport_ble import BLEPeripheral
 from alerts import AlertManager
+import shell_log
 
 print("== ALVEA TEST-RIG :: SIMULATORE BLE ASINCRONO (modalita' alternativa/demo) ==")
 
@@ -38,10 +39,12 @@ def ble_command_callback(payload):
         print("-> [ERRORE] Parsing del comando BLE fallito:", e)
 
 
+
 ble = BLEPeripheral(command_callback=ble_command_callback)
 alert_mgr = AlertManager(ble, transport_kind="ble")
 sensor = SimSensor()
 last_pub = time.time()
+
 
 while True:
     if time.time() - last_pub >= current_publish_period:
@@ -61,10 +64,12 @@ while True:
         
         if ble.is_connected():
             reading["device_status"] = "SYSTEM_OK" if current_patient_id else "WARN_PATIENT_NOT_ASSIGNED"
+            shell_log.log_reading(reading, reading["device_status"])
             if ble.send_json(reading):
                 print("[SIM BLE NOTIFY]:", reading)
         else:
             reading["device_status"] = "WARN_BLE_DISCONNECTED"
+            shell_log.log_reading(reading, reading["device_status"])
             print("[SIM BLE STANDBY]:", reading)
             
     time.sleep_ms(10)

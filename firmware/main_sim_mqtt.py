@@ -9,6 +9,8 @@ from transport_mqtt import MQTTPublisher
 from sensor_sim import SimSensor
 from alerts import AlertManager
 import ntp_time
+import shell_log
+
 
 try:
     import secrets
@@ -96,15 +98,18 @@ while True:
         # Inietta lo stato di rete nel pacchetto diagnostico
         if not mqtt.is_connected:
             reading["device_status"] = "WARN_NETWORK_DISCONNECTED"
+            shell_log.log_reading(reading, reading["device_status"])
             print("[SIM LOCAL]:", reading)
         elif current_patient_id is None:
             reading["device_status"] = "WARN_PATIENT_NOT_ASSIGNED"
+            shell_log.log_reading(reading, reading["device_status"])
             mqtt.publish(reading)
             print("[SIM TX]:", reading)
         else:
             reading["device_status"] = "SYSTEM_OK"
+            shell_log.log_reading(reading, reading["device_status"])
             mqtt.publish(reading)
             print("[SIM TX]:", reading)
             
-    # Un piccolissimo sleep per allentare la CPU in fase di simulazione (risparmio energetico)
+    # Un piccolo sleep per allentare la CPU in fase di simulazione (risparmio energetico)
     time.sleep_ms(10)

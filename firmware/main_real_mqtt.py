@@ -1,11 +1,7 @@
 # main_real_mqtt.py - Firmware di Produzione ad Alta Affidabilita' (Bidirezionale).
 #
 # Architettura sensoristica: ECG (AD8232) come unica fonte di BPM e
-# Frequenza Respiratoria. Niente PPG (rimosso: la ridondanza che offriva
-# sul BPM e sull'aderenza cutanea non giustificava il costo aggiuntivo di
-# cablaggio/test/documentazione per un prototipo didattico), niente SpO2
-# e niente HRV (scelta di progetto: tempi stretti, focus della tesi
-# sull'EDR). La Frequenza Respiratoria e' derivata dagli intervalli RR
+# Frequenza Respiratoria derivata dagli intervalli RR
 # dell'ECG (EDR - ECG-Derived Respiration), tramite il modulo resp_edr.py.
 
 import time
@@ -20,6 +16,7 @@ from sensor_battery import BatteryMonitor
 from alerts import AlertManager
 import resp_edr
 import ntp_time
+import shell_log
 
 try:
     import secrets
@@ -178,7 +175,10 @@ while True:
             "device_status": status_string,
             "source": "production_firmware"
         }
-        
+
+        # Riga compatta leggibile in Shell (Thonny)
+        shell_log.log_reading(reading, status_string)
+
         if mqtt.is_connected:
             mqtt.publish(reading)
         else:

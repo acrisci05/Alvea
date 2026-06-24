@@ -5,11 +5,7 @@
 # accesso a Internet
 #
 # Architettura sensoristica: ECG (AD8232) come unica fonte di BPM e
-# Frequenza Respiratoria. Niente PPG (rimosso: la ridondanza che offriva
-# sul BPM e sull'aderenza cutanea non giustificava il costo aggiuntivo di
-# cablaggio/test/documentazione per un prototipo didattico), niente SpO2
-# e niente HRV (scelta di progetto: tempi stretti, focus della tesi
-# sull'EDR). La Frequenza Respiratoria e' derivata dagli intervalli RR
+# Frequenza Respiratoria derivata dagli intervalli RR
 # dell'ECG (EDR - ECG-Derived Respiration), tramite il modulo resp_edr.py.
 
 import time
@@ -22,6 +18,7 @@ from sensor_temp import TempSensor
 from sensor_battery import BatteryMonitor
 from alerts import AlertManager
 import resp_edr
+import shell_log
 
 print("=== ALVEA: AVVIO ARCHITETTURA BLE (modalita' alternativa/demo) ===")
 
@@ -149,6 +146,9 @@ while True:
             "device_status": status_string,
             "source": "production_ble"
         }
+
+        # Riga compatta leggibile in Shell (Thonny)
+        shell_log.log_reading(reading, status_string)
 
         if ble.is_connected():
             ble.send_json(reading)
