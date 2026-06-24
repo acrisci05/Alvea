@@ -76,7 +76,7 @@ services:
     environment:
       MQTT_HOST: mosquitto
       MQTT_PORT: 1883
-      TOPIC_DATA: alvea/data
+      TOPIC_DATA: alvea/devices/+/telemetry
       SECRET_KEY: ${SECRET_KEY:-dev_secret}
       # InfluxDB dal backend e' OPZIONALE (Node-RED e' il percorso canonico)
       INFLUX_ENABLED: "false"
@@ -87,6 +87,27 @@ services:
     depends_on:
       - mosquitto
 
+  # Container di sviluppo per l'app mobile (React Native / Expo, SDK 54).
+  # Monta il progetto come volume e avvia Metro in modalita' tunnel.
+  mobile:
+    build: ../mobile
+    container_name: alvea_mobile
+    working_dir: /workspace/app
+    volumes:
+      - ../mobile:/workspace/app
+      - expo_node_modules:/workspace/app/node_modules
+    ports:
+      - "8081:8081"      # Metro bundler
+      - "19000:19000"    # Expo
+      - "19001:19001"
+      - "19006:19006"    # Expo devtools / web
+    command: sh -c "npm install && npx expo start --tunnel"
+    stdin_open: true
+    tty: true
+    depends_on:
+      - backend
+
 volumes:
   influxdb_data:
   grafana_data:
+  expo_node_modules:
