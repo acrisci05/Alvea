@@ -9,6 +9,7 @@ try:
     import secrets
     _MQTT_USER = getattr(secrets, "MQTT_USER", config.MQTT_USER)
     _MQTT_PASS = getattr(secrets, "MQTT_PASS", config.MQTT_PASS)
+    
 except ImportError:
     _MQTT_USER = config.MQTT_USER
     _MQTT_PASS = config.MQTT_PASS
@@ -67,14 +68,23 @@ class MQTTPublisher:
                 print("MQTT: Errore durante la ricezione messaggi:", e)
                 self.is_connected = False
 
-    def publish(self, payload_dict):
-        """Invia il dato se connesso."""
+    def publish_to(self, topic, payload_dict):
+        """Invia un dizionario come JSON su un topic arbitrario, se connesso.
+        Centralizza la logica di invio/gestione errori: sia publish()
+        (telemetria su TOPIC_DATA) sia AlertManager (alert su TOPIC_ALERT,
+        vedi alerts.py) passano da qui, invece di duplicare il try/except
+        e l'aggiornamento di is_connected in piu' punti del firmware.
+        """
         if not self.is_connected:
             return False
         try:
-            self.client.publish(config.TOPIC_DATA, json.dumps(payload_dict))
+            self.client.publish(topic, json.dumps(payload_dict))
             return True
         except Exception as e:
-            print("MQTT: Errore di invio spontaneo, disconnessione rilevata.")
+            print("MQTT: Errore di invio, disconnessione rilevata su topic", topic, ":", e)
             self.is_connected = False
             return False
+
+    def publish(self, payload_dict):
+        """Invia il dato di telemetria sul topic dati standard."""
+        return self.publish_to(config.TOPIC_DATA, payload_dict)

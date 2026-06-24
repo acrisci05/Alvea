@@ -108,7 +108,7 @@ while True:
         ecg.feed(ecg.read_raw())
     else:
         ecg.reset()
-
+            
     # 3. MACCHINA A STATI DI RETE E ASCOLTO COMANDI
     wifi_mga.rinfresca_connessione()
     if wifi_mga.is_connected():
@@ -142,8 +142,7 @@ while True:
         final_temp = temp_val if temp_val is not None else 0.0
 
         # EDR (Frequenza Respiratoria): derivata dagli intervalli RR
-        # dell'ECG sulla finestra estesa (30s di default, vedi
-        # sensor_ecg.RR_HISTORY_S). Disponibile solo se il contatto ECG è presente.
+        # dell'ECG sulla finestra estesa. Disponibile solo se il contatto ECG è presente.
         if contact_ecg:
             rr_history = ecg.get_rr_history()
             resp_rate = resp_edr.compute_edr_resp_rate(rr_history)

@@ -1,9 +1,7 @@
 # alerts.py - Generazione e invio di alert locali rilevati dal device.
 #
-# Questo modulo ha il compito di generare alert sia di tipo "device/hardware"
-# (guasti/assenza di contatto dei sensori, batteria scarica) sia l'alert
-# clinico basato su soglia per la frequenza respiratoria (via EDR), con
-# un formato dati compatibile con quanto richiesto
+# Questo modulo ha il compito di generare alert sia di tipo "device/hardware" (guasti/assenza di contatto dei sensori, batteria scarica) sia l'alert
+# clinico basato su soglia per la frequenza respiratoria (via EDR), con un formato dati compatibile con quanto richiesto
 
 import time
 import json
@@ -33,21 +31,13 @@ class AlertManager:
 
     def _send(self, alert_dict):
         if self.transport_kind == "mqtt":
-            if getattr(self.transport, "is_connected", False):
-                try:
-                    self.transport.client.publish(
-                        config.TOPIC_ALERT,
-                        json.dumps(alert_dict)
-                    )
-                    print("[ALERT MQTT TX]:", alert_dict)
-                    return True
-                except Exception as e:
-                    print("[ALERT] Invio MQTT fallito:", e)
-                    self.transport.is_connected = False
-                    return False
-            else:
-                print("[ALERT LOCALE - rete assente]:", alert_dict)
-                return False
+            # Riusa la logica di invio/gestione errori di MQTTPublisher
+            # (publish_to) accedendo direttamente a transport.client.publish
+            if self.transport.publish_to(config.TOPIC_ALERT, alert_dict):
+                print("[ALERT MQTT TX]:", alert_dict)
+                return True
+            print("[ALERT LOCALE - rete assente o invio fallito]:", alert_dict)
+            return False
         elif self.transport_kind == "ble":
             if self.transport.is_connected():
                 ok = self.transport.send_json(alert_dict)
@@ -61,20 +51,15 @@ class AlertManager:
 
     def check_fault(self, condition_name, is_faulty, parametro, descrizione, gravita="WARNING",
                      patient_id=None, descrizione_risolto=None):
-        """Da chiamare ad ogni ciclo di telemetria con lo stato corrente
-        (vero/falso) di una condizione di guasto. Pubblica un alert solo
-        alla transizione "diventa persistente" e un altro alla
-        risoluzione, evitando di floodare il broker.
+        """Da chiamare ad ogni ciclo di telemetria con lo stato corrente (vero/falso) di una condizione di guasto.
+        Pubblica un alert solo
+        alla transizione "diventa persistente" e un altro alla risoluzione.
         """
         if is_faulty:
             self._fault_streaks[condition_name] = self._fault_streaks.get(condition_name, 0) + 1
             if (self._fault_streaks[condition_name] >= config.ALERT_FAULT_STREAK_THRESHOLD
                     and condition_name not in self._active_alerts):
-                # Segniamo la condizione come "attiva" solo se l'invio e' andato
-                # a buon fine: se la rete/BLE non e' disponibile in questo
-                # momento, _send() ritorna False e al prossimo ciclo di
-                # telemetria ci riproveremo, invece di considerare l'alert
-                # gia' notificato senza che sia mai arrivato a destinazione.
+                # Segniamo la condizione come "attiva" solo se l'invio e' andato a buon fine
                 if self._send(self._build_alert(parametro, descrizione, gravita, patient_id)):
                     self._active_alerts.add(condition_name)
         else:
@@ -83,9 +68,7 @@ class AlertManager:
                 testo_risolto = descrizione_risolto or (
                     descrizione.replace("rilevato", "risolto") + " (RISOLTO)"
                 )
-                # Stesso discorso del ramo "guasto": rimuoviamo la condizione
-                # da _active_alerts solo se siamo riusciti a notificare la
-                # risoluzione, altrimenti ci riproveremo al prossimo ciclo.
+                # Rimozione della condizione da _active_alerts solo se è stata notificata la risoluzione
                 if self._send(self._build_alert(
                     parametro,
                     testo_risolto,
@@ -112,8 +95,7 @@ class AlertManager:
     def check_resp_rate(self, resp_rate, patient_id=None):
         """Alert clinico: tachipnea, frequenza respiratoria sopra la
         soglia configurata (Asma pediatrico). Da chiamare solo quando il
-        contatto ECG e' presente (resp_rate == 0.0 indica buffer RR
-        insufficiente/assenza di contatto, non un valore fisiologico)."""
+        contatto ECG e' presente"""
         if resp_rate is None or resp_rate <= 0.0:
             return
         is_high = resp_rate > config.DEFAULT_ALARM_RESP_MAX

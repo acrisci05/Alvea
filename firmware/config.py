@@ -1,12 +1,5 @@
 # config.py - Configurazione centrale del firmware Alvea
 # VERSIONE DI PRODUZIONE: Predisposto per sicurezza e configurazione remota
-#
-# Architettura sensoristica: ECG (AD8232) come unica fonte di BPM e
-# Frequenza Respiratoria (tramite EDR, vedi resp_edr.py). Niente PPG,
-# niente SpO2, niente HRV: scelte di progetto motivate da tempi stretti e
-# dalla volonta' di concentrare l'impegno implementativo su un'unica
-# pipeline ben fatta. Il rilevamento dell'aderenza cutanea si basa sui
-# soli pin leads-off dell'AD8232 (GPIO32/33).
 
 # --- IDENTITA' DISPOSITIVO ---
 DEVICE_ID = "ALVEA_04"
@@ -15,8 +8,8 @@ DEVICE_ID = "ALVEA_04"
 MQTT_BROKER = "192.168.1.50" 
 MQTT_PORT   = 1883        
 
-# Le credenziali MQTT riportate sono solo dei fallback di sviluppo per non rompere l'esecuzione se secrets.py non
-# definisce queste variabili.
+# Le credenziali MQTT riportate sono solo dei fallback di sviluppo
+# per non rompere l'esecuzione se secrets.py non definisce queste variabili.
 MQTT_USER = "alvea_device"    
 MQTT_PASS = "secure_password"  
 TOPIC_DATA  = f"alvea/devices/{DEVICE_ID}/telemetry"

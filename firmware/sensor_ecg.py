@@ -30,10 +30,6 @@ PHYSIO_BPM_MIN      = 40
 PHYSIO_BPM_MAX      = 180
 
 # --- Finestra estesa per EDR (Frequenza Respiratoria) ---
-# Il respiro (15-30 atti/min) richiede diversi cicli respiratori per
-# essere stimato in modo stabile: una finestra di 6s (quella usata per
-# il BPM istantaneo) e' troppo corta. Si usa quindi una finestra dedicata,
-# piu' ampia, alimentata in parallelo dagli stessi picchi R rilevati.
 RR_HISTORY_S = 30
 
 # Dimensionamento statico: nel caso peggiore (tachicardia sostenuta a
@@ -66,14 +62,17 @@ class ECGMonitor:
         self._deriv_ptr = 0 # Indice di scrittura corrente
         self._buffer_filled = False
 
+        self._deriv_sum = 0
+        self._deriv_max = 0
+        MAX_DECAY_PER_SAMPLE = 0.999  # decadimento lento (tempo di dimezzamento, alcuni secondi a 250Hz)
+        self._max_decay = MAX_DECAY_PER_SAMPLE
+
         # Array statico per i picchi (massimo teorico nella finestra)
         self._peak_times = [0] * MAX_PEAKS_IN_WINDOW
         self._peak_count = 0
 
         # Ring buffer statico separato per la finestra estesa (RR_HISTORY_S) usata dall'EDR.
-        # Memorizza direttamente gli intervalli RR (ms),
-        # non i timestamp dei picchi, perche' a quella finestra interessa
-        # solo la sequenza di RR, non il singolo istante del picco.
+        # Memorizza direttamente gli intervalli RR (ms) di interesse.
         self._rr_hist = [0] * MAX_RR_HISTORY
         self._rr_hist_ptr = 0
         self._rr_hist_count = 0
@@ -96,6 +95,8 @@ class ECGMonitor:
         self._deriv_sq = [0] * self._deriv_win
         self._deriv_ptr = 0
         self._buffer_filled = False
+        self._deriv_sum = 0
+        self._deriv_max = 0
         self._peak_count = 0
         self._last_peak_ms = 0
         self._prev_v = 0
@@ -114,10 +115,19 @@ class ECGMonitor:
         self._prev_v = v
         d_sq = d * d
 
-        # Scrittura nel Ring Buffer statico
+        # Scrittura nel Ring Buffer statico, mantenendo la somma
+        # incrementale: sottrazione del valore che viene sovrascritto (quello
+        # piu' vecchio nella finestra) e aggiunta del nuovo.
+        old_val = self._deriv_sq[self._deriv_ptr]
         self._deriv_sq[self._deriv_ptr] = d_sq
+        self._deriv_sum += d_sq - old_val
+
+        # Massimo della finestra: aggiornamento O(1) con decadimento lento
+        self._deriv_max *= self._max_decay
+        if d_sq > self._deriv_max:
+            self._deriv_max = d_sq
         
-        # Recuperiamo gli ultimi 3 elementi storici mappando l'indice circolare
+        # Recupero degli ultimi 3 elementi storici mappando l'indice circolare
         idx_c = self._deriv_ptr
         idx_b = (self._deriv_ptr - 1) % self._deriv_win
         idx_a = (self._deriv_ptr - 2) % self._deriv_win
@@ -130,12 +140,13 @@ class ECGMonitor:
             self._deriv_ptr = 0
             self._buffer_filled = True
 
-        # Ricalcolo soglia adattiva (~10 Hz)
+        # Ricalcolo soglia adattiva (~10 Hz): O(1), usa le statistiche
+        # incrementali (sum esatta, max a decadimento) invece di
+        # riscandire l'intero buffer ad ogni ricalcolo.
         if self._i % 25 == 0 and (self._buffer_filled or self._deriv_ptr >= SAMPLE_RATE_HZ):
             valid_n = self._deriv_win if self._buffer_filled else self._deriv_ptr
-            valid_slice = self._deriv_sq[:valid_n] if not self._buffer_filled else self._deriv_sq
-            mx = max(valid_slice)
-            mean = sum(valid_slice) // valid_n
+            mean = self._deriv_sum // valid_n
+            mx = self._deriv_max
             self._threshold = mean + int((mx - mean) * THRESHOLD_FACTOR)
 
         # Analisi del picco locale
@@ -154,9 +165,8 @@ class ECGMonitor:
                         self._peak_times[MAX_PEAKS_IN_WINDOW-1] = now_ms
 
                     # Alimentazione della finestra estesa RR (EDR):
-                    # calcoliamo l'RR rispetto al picco precedente e lo
-                    # scriviamo nel ring buffer statico, senza riallocare
-                    # memoria (stesso pattern del buffer derivativo sopra).
+                    # calcolo dell'RR rispetto al picco precedente e
+                    # scrittura nel ring buffer statico, senza riallocare memoria
                     if self._last_rr_peak_ms is not None:
                         rr = time.ticks_diff(now_ms, self._last_rr_peak_ms)
                         if 333 <= rr <= 1500:
@@ -203,8 +213,7 @@ class ECGMonitor:
 
         E' la base dati da cui resp_edr.py deriva l'EDR (Frequenza
         Respiratoria), perche' questa metrica necessita di piu' cicli
-        respiratori per essere stabile, a differenza del BPM istantaneo
-        che usa get_rr_intervals().
+        respiratori per essere stabile.
         """
         if self._rr_hist_count == 0:
             return []
@@ -212,6 +221,7 @@ class ECGMonitor:
             # Buffer non ancora pieno: i dati validi sono semplicemente i
             # primi _rr_hist_count elementi scritti in ordine.
             return self._rr_hist[:self._rr_hist_count]
+        
         # Buffer pieno e circolare: l'ordine cronologico riparte dal
         # puntatore di scrittura corrente (il piu' vecchio).
         return self._rr_hist[self._rr_hist_ptr:] + self._rr_hist[:self._rr_hist_ptr]
