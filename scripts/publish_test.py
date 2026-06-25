@@ -5,12 +5,8 @@ Pubblica letture simulate su MQTT esattamente come farebbe l'ESP32 di produzione
 per testare la pipeline (Node-RED -> InfluxDB -> Grafana -> App) senza l'hardware fisico.
 
 NOTA: il dispositivo ha un solo sensore biomedicale, l'ECG (AD8232). Da
-esso si derivano BPM e, via EDR, la frequenza respiratoria. Non esiste
-alcun sensore SpO2/PPG: questo script non genera né invia un campo
-"spo2", per restare fedele al payload reale del firmware (vedi
-main_real_mqtt.py / sensor_sim.py).
+esso si derivano BPM e, via EDR, la frequenza respiratoria.
 
-Uso:
     pip install paho-mqtt
     python publish_test.py                                      # nominale, 1 Hz
     python publish_test.py --scenario asthma_attack             # test allarme asma (tachipnea)
@@ -24,7 +20,7 @@ import time
 import paho.mqtt.client as mqtt
 
 DEVICE_ID = "ALVEA_04"
-TOPIC = f"alvea/devices/{DEVICE_ID}/telemetry"   # topic corretto firmware
+TOPIC = f"alvea/devices/{DEVICE_ID}/telemetry" 
 
 def make_reading(scenario):
     """Genera un dizionario payload JSON identico a quello dell'ESP32 reale."""
@@ -37,7 +33,7 @@ def make_reading(scenario):
         bpm, skin_temp, resp_rate = 0.0, 0.0, 0.0
 
     # 2. SCENARIO: Attacco d'asma (Tachipnea + Tachicardia lieve).
-    #    È l'unico alert clinico per soglia generato realmente dal firmware
+    #    Alert clinico per soglia generato dal firmware
     #    (firmware/alerts.py: check_resp_rate, soglia
     #    config.DEFAULT_ALARM_RESP_MAX = 40.0, gravità CRITICAL).
     elif scenario == "asthma_attack":
@@ -55,9 +51,7 @@ def make_reading(scenario):
             skin_temp = round(random.uniform(31.0, 34.0), 1)
             resp_rate = round(random.uniform(20.0, 30.0), 1)
 
-    # device_status: stesse stringhe usate dal firmware reale (vedi
-    # main_real_mqtt.py), così il backend/app che lo interpreta si
-    # comporta esattamente come con un device vero.
+    # device_status: stringhe coerenti a quelle del firmware
     if not contact:
         status = "ERR_ECG_LEADS_OFF"
     else:
@@ -67,8 +61,8 @@ def make_reading(scenario):
         "device_id": DEVICE_ID,
         "timestamp": time.time(),
         "bpm": bpm,
-        "skin_temperature": skin_temp,    # allineato al firmware
-        "respiration_rate": resp_rate,    # allineato al firmware
+        "skin_temperature": skin_temp,    
+        "respiration_rate": resp_rate,    
         "battery_pct": battery,
         "sensor_contact": contact,
         "patient_id": "p_0001",
