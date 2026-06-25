@@ -19,25 +19,30 @@ cambia nulla a valle:
 flowchart LR
     FW[ESP32<br/>sim o reale] -- "MQTT alvea/devices/{ID}/telemetry" --> MQ[(Mosquitto)]
     MQ -- "MQTT alvea/devices/{ID}/commands" --> FW
-    FW -. "BLE (alternativo)" .-> APP[App mobile]
+    FW -. "BLE (alternativo, nessun consumer nell'app attuale)" .-> BLE_RX[Eventuale ricevitore BLE]
     MQ --> NR[Node-RED] --> IDB[(InfluxDB)] --> GF[Grafana]
     MQ --> BE[Backend FastAPI] --> SQL[(SQLite)]
-    BE -- "WebSocket / SSE" --> APP
+    BE -- "WebSocket / SSE" --> APP[App mobile]
 ```
 
 ## Payload canonico
 ## JSON
-{ "device_id": "ALVEA_ASTHMA_ANKLE_01", "timestamp": 1733740000.0,
-  "bpm": 95.0, "skin_temperature": 32.5, "respiration_rate": 22.0, 
-  "sensor_contact": true, "device_status": "SYSTEM_OK", "source": "production_firmware" }
+{ "device_id": "ALVEA_04", "patient_id": "p_0001", "timestamp": 1733740000.0,
+  "bpm": 95.0, "skin_temperature": 32.5, "respiration_rate": 22.0,
+  "battery_pct": 86.0, "sensor_contact": true, "device_status": "SYSTEM_OK",
+  "source": "production_firmware" }
+
+> Nessun campo `spo2`: il dispositivo ha un solo sensore biomedicale,
+> l'ECG (AD8232), da cui derivano sia il BPM sia, via EDR, la frequenza
+> respiratoria.
 
 
 ## Struttura del repository
 ```Alvea/
 ├── firmware/        # MicroPython ESP32: RingBuffer ECG, Filtro IIR EDR, MQTT Async
-├── backend/         # FastAPI: auth RBAC (Medico/Paziente), API Rest, WebSocket/SSE
+├── backend/         # FastAPI: auth JWT (account Caregiver), API Rest, WebSocket/SSE
 ├── docker-stack/    # Mosquitto + Node-RED + InfluxDB + Grafana + backend
-├── mobile/          # App React Native / Expo (vista Paziente real-time e alert)
+├── mobile/          # App React Native / Expo (vista Caregiver real-time e alert)
 ├── scripts/         # publish_test.py: HIL Testing e simulazione periferica
 └── docs/            # Fase 2/3: requisiti, use case, E-R, sequence, architettura
 ```
@@ -103,6 +108,14 @@ cd mobile && npm install && npx expo start
 ```
 Impostare API_URL in mobile/src/config.js con l'IP del PC. Dettagli in
 mobile/README.md.
+
+> **Nota sul flusso con backend reale** (`DEMO_MODE = false` in
+> `mobile/src/config.js`): dopo la registrazione (`POST /register`), va
+> registrato anche il device del caregiver con `POST /devices` (es. via
+> `http://localhost:8000/docs`) prima del primo login, perché `POST
+> /login` restituisce il `device_id` solo se il caregiver ne ha già
+> almeno uno associato. Senza un device registrato, l'app resta sulla
+> schermata di accesso anche dopo un login riuscito.
 
 ## Documentazione (Fase 2 / Fase 3)
 
