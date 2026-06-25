@@ -1,29 +1,41 @@
-# schemas.py - Schemi Pydantic (v2) di richiesta/risposta.
+# schemas.py - Schemi Pydantic per validazione I/O (request/response FastAPI
+# e validazione del payload MQTT in ingresso).
 #
-# Ogni classe definisce la forma dei dati in ingresso (payload ricevuti)
-# o in uscita (response mandate all'app). Pydantic valida automaticamente
-# i tipi e genera errori HTTP 422 se il payload non è conforme.
+# NOTA: questo file era assente nell'archivio caricato ed è stato
+# ricostruito sulla base di:
+#   - tutti i riferimenti a "schemas.XYZ" presenti in main.py e crud.py
+#   - il payload reale pubblicato dal firmware su .../telemetry
+#     (vedi main_real_mqtt.py, main_sim_mqtt.py, sensor_sim.py)
+#   - i campi del modello ORM in models.py (allineati al firmware)
+#
+# Se lo schemas.py originale del progetto differisce nei dettagli (es.
+# validatori aggiuntivi, vincoli di lunghezza sullo username), va
+# confrontato e riconciliato con questa versione.
+
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel
+
+from pydantic import BaseModel, ConfigDict
 
 
-# ===================== AUTH =====================
+# ===================== CAREGIVER / AUTH =====================
 
 class CaregiverCreate(BaseModel):
-    """Dati richiesti per registrare un nuovo account caregiver."""
+    """Payload di POST /register."""
     username: str
     password: str
 
+
 class CaregiverResponse(BaseModel):
-    """Dati restituiti dopo la registrazione o il login."""
+    """Risposta di POST /register (la password hashata non viene mai esposta)."""
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     username: str
-    class Config:
-        from_attributes = True  # permette la creazione da un ORM model SQLAlchemy
+
 
 class Token(BaseModel):
-    """Token JWT restituito dopo il login."""
+    """Risposta di POST /login."""
     access_token: str
     token_type: str = "bearer"
 
@@ -31,87 +43,91 @@ class Token(BaseModel):
 # ===================== DEVICE =====================
 
 class DeviceCreate(BaseModel):
-    """Payload per associare una cavigliera all'account caregiver."""
-    device_id: str          # es. "ALVEA_04" — identificativo univoco del firmware
-    baby_name: Optional[str] = None  # nome del bambino (opzionale, per l'UI)
+    """Payload di POST /devices: registra/rivendica una cavigliera."""
+    device_id: str
+    baby_name: Optional[str] = None
+
 
 class DeviceResponse(BaseModel):
-    """Device restituito nelle liste e nei dettagli."""
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     device_id: str
-    baby_name: Optional[str]
-    owner_id: int
-    class Config:
-        from_attributes = True
+    baby_name: Optional[str] = None
+    owner_id: Optional[int] = None
 
 
-# ===================== TELEMETRIA =====================
+class DeviceCommand(BaseModel):
+    """Payload di POST /devices/{id}/command.
+
+    Campi allineati a quanto il firmware accetta in mqtt_callback /
+    mqtt_command_callback (main_real_mqtt.py / main_sim_mqtt.py):
+      - publish_period_s: nuova frequenza di invio telemetria (secondi)
+      - patient_id: assegna (o rimuove, passando None) il paziente al device
+    Tutti i campi sono opzionali: il backend invia solo quelli effettivamente
+    impostati (vedi filtro `if v is not None` in main.py).
+    """
+    publish_period_s: Optional[int] = None
+    patient_id: Optional[str] = None
+
+
+# ===================== READING =====================
 
 class ReadingIn(BaseModel):
-    """Payload JSON canonico prodotto dall'ESP32 (simulatore o sensore reale).
+    """Valida il payload di telemetria pubblicato dal firmware su
+    alvea/devices/<device_id>/telemetry.
 
-    Tutti i campi corrispondono esattamente ai campi pubblicati dal firmware
-    su alvea/devices/<device_id>/telemetry. I campi Optional hanno None come
-    default perché il firmware può ometterli in alcune condizioni (es.
-    battery_pct=None se l'ADC della batteria è guasto).
+    Campi e tipi presi direttamente dal dizionario costruito in
+    main_real_mqtt.py / sensor_sim.py:
+      device_id, patient_id, timestamp, bpm, skin_temperature,
+      respiration_rate, battery_pct, sensor_contact, device_status, source.
     """
     device_id: str
-    patient_id: Optional[str] = None       # associazione paziente-dispositivo
-    timestamp: Optional[float] = None      # Unix epoch (secondi); se None si usa now()
-    bpm: float                             # frequenza cardiaca (BPM)
-    skin_temperature: float                # temperatura cutanea periferica (°C)
-    spo2: float                            # saturazione ossigeno periferico (%)
-    respiration_rate: float                # frequenza respiratoria (atti/min)
-    battery_pct: Optional[float] = None   # carica batteria (%); None se sensore guasto
-    sensor_contact: bool                   # True solo se ECG e PPG sono entrambi a contatto
-    device_status: Optional[str] = None   # es. "SYSTEM_OK", "ERR_ECG_LEADS_OFF"
-    source: Optional[str] = None          # "sim" | "production_firmware"
+    patient_id: Optional[str] = None
+    timestamp: Optional[float] = None
+    bpm: float = 0.0
+    skin_temperature: float = 0.0
+    respiration_rate: float = 0.0
+    # battery_pct può essere None se l'ADC della batteria è guasto
+    battery_pct: Optional[float] = None
+    # spo2 non è ancora prodotto dal firmware attuale (né main_real_mqtt.py
+    # né sensor_sim.py lo includono nel payload): lo manteniamo opzionale
+    # qui e in alerts.py/models.py per quando verrà aggiunto, senza che
+    # la validazione del payload odierno fallisca.
+    spo2: Optional[float] = None
+    sensor_contact: bool = True
+    device_status: Optional[str] = None
+    source: Optional[str] = None
+
 
 class ReadingResponse(BaseModel):
-    """Lettura restituita dagli endpoint REST e dal canale realtime.
+    """Risposta per GET /devices/{id}/readings e /latest."""
+    model_config = ConfigDict(from_attributes=True)
 
-    Espone tutti i parametri vitali in modo che l'app possa visualizzarli
-    senza dover fare ulteriori chiamate.
-    """
     id: int
     device_id: str
-    patient_id: Optional[str]
-    ts: datetime                           # timestamp salvato nel DB (UTC)
-    bpm: float
-    skin_temperature: float
-    spo2: float
-    respiration_rate: float
-    battery_pct: Optional[float]
-    sensor_contact: bool
-    device_status: Optional[str]
-    source: Optional[str]
-    class Config:
-        from_attributes = True
+    patient_id: Optional[str] = None
+    ts: datetime
+    bpm: Optional[float] = None
+    skin_temperature: Optional[float] = None
+    respiration_rate: Optional[float] = None
+    spo2: Optional[float] = None
+    battery_pct: Optional[float] = None
+    sensor_contact: Optional[bool] = None
+    device_status: Optional[str] = None
+    source: Optional[str] = None
 
 
 # ===================== ALERT =====================
 
 class AlertResponse(BaseModel):
-    """Allarme clinico o tecnico restituito dagli endpoint REST."""
+    """Risposta per GET /devices/{id}/alerts."""
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     device_id: str
     ts: datetime
-    kind: str       # es. "bpm_high", "spo2_low", "resp_low", "contact_lost"
-    severity: str   # "warning" | "critical" | "technical"
-    message: str    # messaggio leggibile
-    value: Optional[float]  # valore che ha scatenato l'allarme
-    class Config:
-        from_attributes = True
-
-
-# ===================== COMANDI DEVICE =====================
-
-class DeviceCommand(BaseModel):
-    """Payload per inviare un comando di configurazione alla cavigliera.
-
-    Il backend pubblica questo JSON sul topic MQTT
-    alvea/devices/<device_id>/commands, che il firmware ascolta per
-    aggiornare la propria configurazione senza riavvio.
-    """
-    publish_period_s: Optional[int] = None   # nuova frequenza di invio (secondi)
-    patient_id: Optional[str] = None         # associa/disassocia il paziente
+    kind: str
+    severity: str
+    message: str
+    value: Optional[float] = None

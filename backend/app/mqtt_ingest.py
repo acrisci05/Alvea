@@ -34,17 +34,32 @@ async def listen_to_mqtt():
             # anche in caso di errore.
             async with aiomqtt.Client(config.MQTT_HOST, config.MQTT_PORT) as client:
 
-                # Si sottoscrive al topic su cui l'ESP32 pubblica i dati.
-                # Da questo momento il broker ci manderà ogni messaggio pubblicato su quel topic.
+                # Si sottoscrive al topic su cui l'ESP32 pubblica la telemetria...
                 await client.subscribe(config.TOPIC_DATA)
                 print("[mqtt] sottoscritto a", config.TOPIC_DATA)
+
+                # ...e al topic separato su cui il firmware pubblica gli alert
+                # hardware/locali (batteria scarica, leads-off persistente,
+                # tachipnea rilevata localmente). Senza questa sottoscrizione
+                # quegli alert non arrivano mai al backend (vedi alerts.py
+                # del firmware / AlertManager._send -> TOPIC_ALERT).
+                await client.subscribe(config.TOPIC_ALERT)
+                print("[mqtt] sottoscritto a", config.TOPIC_ALERT)
 
                 # Loop asincrono: aspetta e processa ogni messaggio in arrivo.
                 # "async for" non blocca: mentre aspetta un messaggio, FastAPI
                 # può continuare a servire le richieste HTTP.
                 async for message in client.messages:
-                    # Decodifica i byte del payload in stringa e la passa al gestore
-                    await _handle_message(message.payload.decode())
+                    topic_str = str(message.topic)
+                    payload_str = message.payload.decode()
+
+                    # Smista il messaggio in base al topic: la telemetria
+                    # (.../telemetry) e gli alert hardware (.../alerts) hanno
+                    # schema e gestione diversi.
+                    if topic_str.endswith("/alerts"):
+                        await _handle_alert_message(payload_str)
+                    else:
+                        await _handle_message(payload_str)
 
         except asyncio.CancelledError:
             # Viene lanciato quando FastAPI si sta spegnendo (lifespan → mqtt_task.cancel()).
@@ -109,12 +124,67 @@ async def _handle_message(payload_str: str):
     # Viene fatto FUORI dal blocco "async with db" perché non riguarda il DB:
     # anche se il broadcast fallisse, il dato è già salvato in modo sicuro.
     await publish_event({
-        "type": "reading",                          # tipo di evento (il client lo usa per distinguere)
-        "device_id": reading["device_id"],          # quale cavigliera ha prodotto i dati
-        "ts": str(saved.ts),                        # timestamp assegnato dal DB
-        "resp_rate": reading.get("resp_rate"),      # frequenza respiratoria (può essere None)
-        "bpm": reading["bpm"],                      # battito cardiaco
-        "temperature": reading["temperature"],      # temperatura cutanea
-        "sensor_contact": reading["sensor_contact"],# fascia a contatto?
-        "alerts": fired,                            # lista degli alert generati (può essere [])
+        "type": "reading",                              # tipo di evento (il client lo usa per distinguere)
+        "device_id": reading["device_id"],              # quale cavigliera ha prodotto i dati
+        "patient_id": reading.get("patient_id"),        # paziente assegnato (può essere None)
+        "ts": str(saved.ts),                            # timestamp assegnato dal DB
+        "respiration_rate": reading.get("respiration_rate"),  # frequenza respiratoria (EDR)
+        "bpm": reading.get("bpm"),                       # battito cardiaco
+        "skin_temperature": reading.get("skin_temperature"),  # temperatura cutanea
+        "spo2": reading.get("spo2"),                     # saturazione ossigeno
+        "battery_pct": reading.get("battery_pct"),        # batteria residua (può essere None se ADC guasto)
+        "sensor_contact": reading.get("sensor_contact"), # fascia a contatto?
+        "device_status": reading.get("device_status"),  # stato diagnostico testuale del firmware
+        "alerts": fired,                                 # lista degli alert generati (può essere [])
+    })
+
+
+# Mappa gravità del firmware (AlertManager._build_alert, vedi alerts.py
+# firmware) -> severity usata dal backend (alerts.py / models.Alert).
+_FIRMWARE_SEVERITY_MAP = {
+    "WARNING": "warning",
+    "CRITICAL": "critical",
+    "INFO": "technical",
+}
+
+
+async def _handle_alert_message(payload_str: str):
+    """Gestisce un alert hardware/locale pubblicato dal firmware su
+    alvea/devices/<device_id>/alerts (vedi AlertManager in alerts.py del
+    firmware: batteria scarica, leads-off persistente, tachipnea rilevata
+    localmente, guasto sensore temperatura).
+
+    Il firmware usa un formato diverso da quello generato da
+    backend.alerts.evaluate(): {device_id, patient_id, parametro,
+    descrizione, gravita, timestamp}. Qui lo traduciamo nel formato salvato
+    da crud.save_alert(): {kind, severity, message, value}.
+    """
+    try:
+        data = json.loads(payload_str)
+        device_id = data["device_id"]
+    except Exception as e:
+        print("[mqtt] alert payload non valido, scartato:", e)
+        return
+
+    alert = {
+        "kind": data.get("parametro", "unknown"),
+        "severity": _FIRMWARE_SEVERITY_MAP.get(data.get("gravita"), "warning"),
+        "message": data.get("descrizione", ""),
+        "value": None,  # il firmware non invia un valore numerico isolato per questi alert
+    }
+
+    async with AsyncSessionLocal() as db:
+        await crud.ensure_device(db, device_id)
+        saved = await crud.save_alert(db, device_id, alert)
+
+    # Broadcast realtime: stesso canale usato per le letture, type diverso
+    # così l'app può distinguere un evento "reading" da un alert standalone.
+    await publish_event({
+        "type": "alert",
+        "device_id": device_id,
+        "patient_id": data.get("patient_id"),
+        "ts": str(saved.ts),
+        "kind": alert["kind"],
+        "severity": alert["severity"],
+        "message": alert["message"],
     })

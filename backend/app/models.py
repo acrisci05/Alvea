@@ -70,7 +70,14 @@ class Device(Base):
 
 
 class Reading(Base):
-    """Singola lettura di telemetria (1 Hz)."""
+    """Singola lettura di telemetria (1 Hz).
+
+    Campi allineati al payload reale pubblicato dal firmware su
+    alvea/devices/<device_id>/telemetry (vedi main_real_mqtt.py /
+    main_sim_mqtt.py / sensor_sim.py): device_id, patient_id, timestamp,
+    bpm, skin_temperature, respiration_rate, battery_pct, sensor_contact,
+    device_status, source.
+    """
 
     __tablename__ = "readings"
 
@@ -80,24 +87,39 @@ class Reading(Base):
     # sia indicizzata per velocizzare le query "dammi tutte le letture di questo device"
     device_id = Column(String, ForeignKey("devices.device_id"), index=True)
 
+    # Paziente assegnato al device al momento della lettura (può essere None
+    # se il caregiver/medico non ha ancora associato un paziente).
+    patient_id = Column(String, nullable=True)
+
     # Timestamp di quando la lettura è stata salvata nel DB.
     # default=datetime.utcnow: se non viene fornito, usa l'ora corrente in UTC.
     ts = Column(DateTime, default=datetime.utcnow, index=True)
 
-    # Frequenza respiratoria in atti/min. nullable=True perché può arrivare
-    # None se il sensore PPG non ha ancora prodotto una stima valida.
-    resp_rate = Column(Float, nullable=True)
+    # Frequenza respiratoria in atti/min (EDR). nullable=True perché può
+    # arrivare 0/None se il contatto ECG non è presente.
+    respiration_rate = Column(Float, nullable=True)
 
     # Battito cardiaco in BPM
-    bpm = Column(Float)
+    bpm = Column(Float, nullable=True)
 
-    # Temperatura cutanea in °C
-    temperature = Column(Float)
+    # Temperatura cutanea in °C (nome allineato al firmware)
+    skin_temperature = Column(Float, nullable=True)
+
+    # Saturazione di ossigeno in % (SpO2)
+    spo2 = Column(Float, nullable=True)
+
+    # Percentuale di batteria residua. nullable=True perché può essere None
+    # se l'ADC della batteria è guasto.
+    battery_pct = Column(Float, nullable=True)
 
     # Flag di contatto: True = fascia a contatto, False = fascia staccata
     sensor_contact = Column(Boolean)
 
-    # Sorgente del dato: "sim" (simulatore) o "ad8232" (sensore ECG reale)
+    # Stato diagnostico testuale del device (es. "SYSTEM_OK",
+    # "ERR_ECG_LEADS_OFF", "WARN_NETWORK_DISCONNECTED", ecc.)
+    device_status = Column(String, nullable=True)
+
+    # Sorgente del dato: "production_firmware" oppure "sim_test_rig"
     source = Column(String, nullable=True)
 
     # Relazione verso Device (lato "molti" → "uno")
