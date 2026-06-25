@@ -12,16 +12,16 @@ sequenceDiagram
     participant GF as Grafana
     participant BE as Backend FastAPI
     participant SQ as DB Relazionale
-    participant APP as App mobile (Paziente)
+    participant APP as App mobile (Caregiver)
 
     loop Frequenza di campionamento (es. 1 Hz)
         ESP->>MQ: publish alvea/devices/{ID}/telemetry (JSON)
-        par Percorso Dashboard Medico
+        par Percorso Dashboard
             MQ-->>NR: ricezione messaggio
-            NR->>NR: calcolo soglie asma (SpO2, Respiro)
-            NR->>DB: write line protocol (vitals_asthma)
-            GF->>DB: query Flux (refresh 1s)
-        and Percorso App Paziente
+            NR->>NR: calcolo soglie asma (Respiro, BPM, Temp)
+            NR->>DB: write line protocol (measurement "vitals")
+            GF->>DB: query Flux (refresh periodico)
+        and Percorso App Caregiver
             MQ-->>BE: messaggio (listener MQTT)
             BE->>BE: valida payload + valuta soglie
             BE->>SQ: salva reading (+ log alert)
@@ -30,7 +30,8 @@ sequenceDiagram
     end
 
     alt Anomalia hardware (device_status != SYSTEM_OK)
-        NR->>MQ: publish alvea/devices/{ID}/alerts (technical)
+        ESP->>MQ: publish alvea/devices/{ID}/alerts (technical/warning/critical)
+        MQ-->>BE: messaggio alert
         BE-->>APP: push alert "Sensore staccato o guasto"
     end
 ```
@@ -40,43 +41,50 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Client as App / Dashboard
+    participant Client as App mobile
     participant BE as Backend FastAPI
     participant SQ as DB Relazionale
 
     Client->>BE: POST /login (username, password)
-    BE->>SQ: SELECT user by username
-    SQ-->>BE: record (hashed_password, role)
+    BE->>SQ: SELECT caregiver by username
+    SQ-->>BE: record (hashed_password)
     BE->>BE: verify_password (bcrypt)
     
     alt credenziali valide
-        BE->>BE: create_access_token (JWT con scope/role)
-        BE-->>Client: 200 { access_token, role }
-        Client->>BE: GET /api/data (Bearer token)
-        BE->>BE: check_permissions(role)
-        BE-->>Client: dati autorizzati (proprio ID per Paziente, tutti per Medico)
+        BE->>SQ: SELECT devices WHERE owner_id = caregiver.id
+        SQ-->>BE: lista device (puo' essere vuota)
+        BE->>BE: create_access_token ({"sub": username})
+        BE-->>Client: 200 { access_token, token_type, device_id }
+        Client->>BE: GET /devices/{device_id}/latest (Bearer token)
+        BE->>BE: get_current_user (decodifica JWT)
+        BE-->>Client: ultima lettura del device
     else credenziali errate
-        BE-->>Client: 401 Unauthorized
+        BE-->>Client: 400 Credenziali errate
     end
 ```
+
+> Nota: `device_id` nella risposta di login è il primo device associato
+> al caregiver (None se non ne ha ancora registrato nessuno). Non esiste
+> un campo `role`: l'autenticazione odierna ha un solo tipo di account
+> (Caregiver), con isolamento dei dati per `owner_id` — vedi
+> `docs/03-er-schema.md`.
 
 ## 3) Configurazione da remoto del Dispositivo
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Med as Dashboard Medico
+    participant App as App mobile
     participant BE as Backend FastAPI
-    participant SQ as DB Relazionale
     participant MQ as Mosquitto (MQTT)
     participant ESP as ESP32 (Firmware)
 
-    Med->>BE: POST /devices/{ID}/config { publish_period_s: 5 }
-    BE->>BE: Verifica permessi (role == 'medico')
-    BE->>SQ: Aggiorna configurazione dispositivo
+    App->>BE: POST /devices/{ID}/command { publish_period_s: 5 }
+    BE->>BE: verifica che il device appartenga al caregiver autenticato
     BE->>MQ: publish alvea/devices/{ID}/commands (JSON)
     MQ-->>ESP: push su topic sottoscritto
     ESP->>ESP: mqtt_callback elabora payload
     ESP->>ESP: aggiorna current_publish_period
-    ESP->>MQ: publish telemetria a nuova frequenza (5s)
+    ESP->>MQ: publish telemetria alla nuova frequenza (5s)
+    BE-->>App: 200 { status: "ok", device_id, command }
 ```

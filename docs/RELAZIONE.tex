@@ -152,12 +152,16 @@ Oltre alla telemetria periodica, il firmware pubblica autonomamente, sul topic \
 % =====================================================================
 \section{Ruoli, Autenticazione e Multitenancy}
 
-Il sistema implementa rigorose politiche di autorizzazione (Role-Based Access Control - RBAC) tramite token \textbf{JWT}. Il database relazionale SQLite traccia l'entità \texttt{USER} definendo due ruoli distinti:
+Il backend implementa oggi un'autenticazione a token \textbf{JWT} con hashing delle password (bcrypt) e isolamento dei dati per account: ogni \texttt{Caregiver} vede solo i device che ha registrato (\texttt{owner\_id}). Non esiste invece, allo stato attuale del repository, una distinzione di \emph{ruolo} (Role-Based Access Control) tra Medico e Paziente: l'entità persistita è un unico \texttt{Caregiver} generico, senza campo \texttt{role}, e qualunque account autenticato ha gli stessi permessi sui propri device.
+
+La separazione Paziente/Caregiver vs Medico Pediatra descritta di seguito è l'architettura \emph{progettata} (\PLAN, vedi Sezione~\ref{sec:stato}), pensata per un'evoluzione naturale del sistema:
 
 \begin{itemize}[leftmargin=1.3em,itemsep=2pt]
-  \item \textbf{Paziente / Caregiver.} Accede all'App mobile (React Native), visualizzando \emph{esclusivamente} la telemetria e gli alert del proprio bambino. Riceve notifiche realtime via WebSocket/SSE.
-  \item \textbf{Medico Pediatra.} Accede all'intera infrastruttura, supervisiona molteplici dispositivi, consulta i grafici storici avanzati su \textbf{Grafana} e può gestire la configurazione remota dei device (frequenza di campionamento, associazione paziente-dispositivo). Ha accesso in lettura/scrittura alla \textbf{Scheda Anamnestica} del paziente (patologie, allergie, terapie cortisoniche).
+  \item \textbf{Paziente / Caregiver.} Accede all'App mobile (React Native), visualizzando \emph{esclusivamente} la telemetria e gli alert del proprio bambino. Riceve notifiche realtime via WebSocket/SSE. È l'unico ruolo oggi realmente implementato.
+  \item \textbf{Medico Pediatra (progettato).} Supervisionerebbe molteplici dispositivi, consulterebbe i grafici storici avanzati su \textbf{Grafana} e potrebbe gestire la configurazione remota dei device (frequenza di campionamento, associazione paziente-dispositivo) con permessi distinti da quelli del Caregiver. Avrebbe accesso in lettura/scrittura alla \textbf{Scheda Anamnestica} del paziente (patologie, allergie, terapie cortisoniche) — entità anch'essa non ancora persistita (\PLAN).
 \end{itemize}
+
+Nel frattempo, l'app mobile espone già la dashboard Grafana e il pulsante di configurazione remota a chiunque sia autenticato (vedi \texttt{SHOW\_GRAFANA\_TAB} in \texttt{mobile/src/config.js}), in attesa che il backend distingua i due ruoli.
 
 % =====================================================================
 \section{Soglie Cliniche per l'Asma Pediatrico}
@@ -201,13 +205,14 @@ Configurazione da remoto: frequenza di pubblicazione e associazione paziente-dis
 Alert hardware dedicati (guasto sensore persistente, batteria scarica) su topic separato & \texttt{firmware/alerts.py} & \IMPL \\
 Simulatore di telemetria fisiologica (incl. batteria simulata) & \texttt{firmware/sensor\_sim.py} & \IMPL \\
 Stack Server (Mosquitto, InfluxDB, Grafana, Node-RED) & \texttt{docker-stack/} & \IMPL \\
-Autenticazione JWT multi-ruolo (RBAC: Medico/Paziente) & \texttt{backend/app/} & \IMPL \\
+Autenticazione JWT a singolo ruolo (Caregiver) con isolamento dati per account & \texttt{backend/app/} & \IMPL \\
 Realtime via WebSocket verso l'App & \texttt{backend/app/realtime.py} & \IMPL \\
 \midrule
 Scheda anamnestica paziente (Database Relazionale) & --- & \PLAN \\
 Notifiche push esterne (Webhook/Telegram) & --- & \PLAN \\
 Soglie dinamiche personalizzate per paziente & --- & \PLAN \\
 Watchdog assenza dati $>$10~s (Node-RED) & --- & \PLAN \\
+Autenticazione multi-ruolo (RBAC: Medico/Paziente) & --- & \PLAN \\
 \bottomrule
 \end{tabularx}
 \end{table}
