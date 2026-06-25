@@ -142,3 +142,19 @@ mantengono comunque l'intervallo "nominale" colorato (rosso/verde): è
 un'indicazione visiva orientativa per il genitore, non un alert clinico
 autonomo — l'unico alert autonomo via soglia resta la tachipnea.
 
+## 7. Correzione soglie di temperatura cutanea (bug: falso allarme costante)
+
+L'intervallo "nominale" della card Temperatura era impostato a 36.0–37.2°C
+(temperatura corporea centrale), mentre il sensore reale (`sensor_temp.py`,
+termistore NTC) e il simulatore (`config.TEMP_SKIN_SIM_MIN/MAX`, vedi
+firmware) misurano la temperatura **cutanea sulla caviglia**, fisiologicamente
+più bassa: il simulatore genera valori nominali nell'intervallo 31.0–34.0°C.
+Con le vecchie soglie, *ogni* lettura nominale risultava "fuori range" e,
+lato backend (`alerts.py`), generava un falso alert critico di "ipotermia"
+a ogni singolo ciclo di telemetria — il sistema era di fatto inutilizzabile
+in demo. La dashboard Grafana aveva già le soglie corrette (31–34.5–35.5°C);
+sono stati allineati a quelle anche `mobile/src/MonitorScreen.js`
+(`TEMP_MIN`/`TEMP_MAX`), `backend/app/config.py` e il flow Node-RED. La card
+è stata anche rinominata da "Temperatura Corporea" a "Temperatura Cutanea"
+per non generare l'aspettativa di una misura di febbre.
+

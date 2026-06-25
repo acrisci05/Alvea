@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "alvea_app",
-    "slug": "snack-d1208024-0853-4352-b643-22f2edf4d6d8",
+    "name": "Alvea",
+    "slug": "alvea-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
