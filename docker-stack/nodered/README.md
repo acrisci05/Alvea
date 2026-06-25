@@ -1,9 +1,10 @@
-# Node-RED — PulseGuard-Baby
+# Node-RED — Alvea
 
 `data/flows.json` viene caricato automaticamente all'avvio del container.
 
 ## Cosa fa il flow
-1. **`baby/data`** (MQTT in) — sottoscrive `pulseguard/baby/data` sul broker `mosquitto`.
+1. **`alvea/devices/+/telemetry`** (MQTT in) — sottoscrive il topic di
+   telemetria di tutti i device sul broker `mosquitto`.
 2. **parse JSON** — converte il payload testuale in oggetto.
 3. **Soglie + Line Protocol** (function) — applica le soglie cliniche, gestisce
    l'anti-falso-allarme della fascia staccata (debounce 5 s) e costruisce la
@@ -11,7 +12,9 @@
 4. **InfluxDB write** (http request) — `POST /api/v2/write` sul bucket `vitals`.
    Il token arriva dalla variabile d'ambiente `INFLUX_TOKEN` (impostata nel
    `docker-compose.yml`): **nessun nodo aggiuntivo da installare**.
-5. **`baby/alerts`** (MQTT out) — ripubblica gli allarmi su `pulseguard/baby/alerts`.
+5. **`alvea/devices/+/alerts`** (MQTT out) — ripubblica gli allarmi generati
+   dalle soglie (oltre a quelli già pubblicati direttamente dal firmware sullo
+   stesso topic).
 
 ## Note
 - Se cambi il token Influx, aggiorna `INFLUX_ADMIN_TOKEN` nel `.env`: il flow lo
