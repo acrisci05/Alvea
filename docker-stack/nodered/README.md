@@ -17,8 +17,7 @@
    stesso topic).
 
 ## Note
-- Se cambi il token Influx, aggiorna `INFLUX_ADMIN_TOKEN` nel `.env`: il flow lo
-  legge da `env.get("INFLUX_TOKEN")`, non serve toccare i nodi.
-- Apri l'editor su <http://localhost:1880> per vedere il flow e i debug.
-- In alternativa puoi usare il nodo `node-red-contrib-influxdb` dalla palette;
-  il flow attuale non lo richiede per restare auto-contenuto.
+- Cambiando il token Influx, deve essere aggiornato `INFLUX_ADMIN_TOKEN` nel `.env` perché il flow lo
+  legge da `env.get("INFLUX_TOKEN")`.
+- Aprire l'editor su <http://localhost:1880> per vedere il flow e i debug.
+- In alternativa, usare il nodo `node-red-contrib-influxdb` dalla palette.
