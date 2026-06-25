@@ -4,9 +4,6 @@
 Pubblica letture simulate su MQTT esattamente come farebbe l'ESP32 di produzione, 
 per testare la pipeline (Node-RED -> InfluxDB -> Grafana -> App) senza l'hardware fisico.
 
-NOTA: il dispositivo ha un solo sensore biomedicale, l'ECG (AD8232). Da
-esso si derivano BPM e, via EDR, la frequenza respiratoria.
-
     pip install paho-mqtt
     python publish_test.py                                      # nominale, 1 Hz
     python publish_test.py --scenario asthma_attack             # test allarme asma (tachipnea)
