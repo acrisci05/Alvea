@@ -152,21 +152,19 @@ Oltre alla telemetria periodica, il firmware pubblica autonomamente, sul topic \
 % =====================================================================
 \section{Ruoli, Autenticazione e Multitenancy}
 
-Il backend implementa oggi un'autenticazione a token \textbf{JWT} con hashing delle password (bcrypt) e isolamento dei dati per account: ogni \texttt{Caregiver} vede solo i device che ha registrato (\texttt{owner\_id}). Non esiste invece, allo stato attuale del repository, una distinzione di \emph{ruolo} (Role-Based Access Control) tra Medico e Paziente: l'entità persistita è un unico \texttt{Caregiver} generico, senza campo \texttt{role}, e qualunque account autenticato ha gli stessi permessi sui propri device.
-
-La separazione Paziente/Caregiver vs Medico Pediatra descritta di seguito è l'architettura \emph{progettata} (\PLAN, vedi Sezione~\ref{sec:stato}), pensata per un'evoluzione naturale del sistema:
+Il backend implementa un'autenticazione a token \textbf{JWT} con hashing delle password (bcrypt) e un controllo accessi basato sui ruoli (\textbf{RBAC}). L'entità \texttt{Caregiver} possiede un campo \texttt{role} che distingue due profili con permessi diversi; ogni accesso ai dati di un device passa da un controllo di proprietà centralizzato (dipendenza \texttt{authorized\_device}), così che l'isolamento dei dati sia garantito su tutti gli endpoint REST:
 
 \begin{itemize}[leftmargin=1.3em,itemsep=2pt]
-  \item \textbf{Paziente / Caregiver.} Accede all'App mobile (React Native), visualizzando \emph{esclusivamente} la telemetria e gli alert del proprio bambino. Riceve notifiche realtime via WebSocket/SSE. È l'unico ruolo oggi realmente implementato.
-  \item \textbf{Medico Pediatra (progettato).} Supervisionerebbe molteplici dispositivi, consulterebbe i grafici storici avanzati su \textbf{Grafana} e potrebbe gestire la configurazione remota dei device (frequenza di campionamento, associazione paziente-dispositivo) con permessi distinti da quelli del Caregiver. Avrebbe accesso in lettura/scrittura alla \textbf{Scheda Anamnestica} del paziente (patologie, allergie, terapie cortisoniche) — entità anch'essa non ancora persistita (\PLAN).
+  \item \textbf{Paziente / Caregiver.} Accede all'App mobile (React Native), visualizzando \emph{esclusivamente} la telemetria e gli alert dei \emph{propri} device (verifica su \texttt{owner\_id}; un device altrui restituisce \texttt{403}). Riceve notifiche realtime via WebSocket/SSE e notifiche push sugli alert critici.
+  \item \textbf{Medico Pediatra.} Ha visione su \emph{tutti} i pazienti, consulta i grafici storici su \textbf{Grafana}, gestisce la configurazione remota dei device (frequenza di campionamento, associazione paziente-dispositivo) e — con permessi esclusivi (\texttt{require\_medico}) — \textbf{configura le soglie cliniche per-device} e consulta l'\textbf{audit log}. Ha accesso in lettura/scrittura alla \textbf{Scheda Anamnestica} del paziente (patologie, allergie, terapie cortisoniche), persistita nel database relazionale.
 \end{itemize}
 
-Nel frattempo, l'app mobile espone già la dashboard Grafana e il pulsante di configurazione remota a chiunque sia autenticato (vedi \texttt{SHOW\_GRAFANA\_TAB} in \texttt{mobile/src/config.js}), in attesa che il backend distingua i due ruoli.
+Tutte le operazioni rilevanti (login, accesso allo storico/agli alert, modifica delle soglie, consultazione/aggiornamento della scheda paziente, invio comandi) sono registrate in un \textbf{audit log} append-only che traccia chi, cosa, su quale risorsa e quando.
 
 % =====================================================================
 \section{Soglie Cliniche per l'Asma Pediatrico}
 
-Il motore decisionale (implementato in Node-RED, lato backend) valuta i pacchetti in arrivo e genera alert per la prevenzione e la gestione dell'attacco d'asma, basandosi su protocolli pediatrici. Il firmware non applica soglie cliniche proprie: si limita a fornire i valori misurati e un indicatore di qualità del dato (\texttt{sensor\_contact}, \texttt{device\_status}), lasciando l'intera interpretazione clinica al backend.
+Il motore decisionale (valutazione in Node-RED per la dashboard e nel backend FastAPI per app e storico) valuta i pacchetti in arrivo e genera alert per la prevenzione e la gestione dell'attacco d'asma, basandosi su protocolli pediatrici. Il firmware non applica soglie cliniche proprie: si limita a fornire i valori misurati e un indicatore di qualità del dato (\texttt{sensor\_contact}, \texttt{device\_status}), lasciando l'intera interpretazione clinica al backend. Le soglie sono \textbf{configurabili per-device dal medico} (entità \texttt{DeviceThreshold}, endpoint \texttt{PUT /devices/\{id\}/thresholds}): in assenza di una configurazione dedicata si applicano i valori di default qui riportati.
 
 \begin{table}[h]
 \centering
@@ -205,14 +203,14 @@ Configurazione da remoto: frequenza di pubblicazione e associazione paziente-dis
 Alert hardware dedicati (guasto sensore persistente, batteria scarica) su topic separato & \texttt{firmware/alerts.py} & \IMPL \\
 Simulatore di telemetria fisiologica (incl. batteria simulata) & \texttt{firmware/sensor\_sim.py} & \IMPL \\
 Stack Server (Mosquitto, InfluxDB, Grafana, Node-RED) & \texttt{docker-stack/} & \IMPL \\
-Autenticazione JWT a singolo ruolo (Caregiver) con isolamento dati per account & \texttt{backend/app/} & \IMPL \\
+Autenticazione JWT multi-ruolo (RBAC: Medico/Paziente) con isolamento dati per account & \texttt{backend/app/auth.py}, \texttt{main.py} & \IMPL \\
 Realtime via WebSocket verso l'App & \texttt{backend/app/realtime.py} & \IMPL \\
+Scheda anamnestica paziente (Database Relazionale) & \texttt{backend/app/} (\texttt{PatientRecord}) & \IMPL \\
+Soglie cliniche configurabili per-device dal medico & \texttt{backend/app/} (\texttt{DeviceThreshold}) & \IMPL \\
+Audit log append-only delle operazioni rilevanti & \texttt{backend/app/} (\texttt{AuditLog}) & \IMPL \\
+Notifiche push (Expo) sugli alert critici & \texttt{backend/app/push.py}, \texttt{mobile/} & \IMPL \\
 \midrule
-Scheda anamnestica paziente (Database Relazionale) & --- & \PLAN \\
-Notifiche push esterne (Webhook/Telegram) & --- & \PLAN \\
-Soglie dinamiche personalizzate per paziente & --- & \PLAN \\
 Watchdog assenza dati $>$10~s (Node-RED) & --- & \PLAN \\
-Autenticazione multi-ruolo (RBAC: Medico/Paziente) & --- & \PLAN \\
 \bottomrule
 \end{tabularx}
 \end{table}
