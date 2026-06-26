@@ -21,9 +21,9 @@ Progetto **Alvea** — dispositivo indossabile da caviglia per il monitoraggio d
 | RQ-07 | Ricevere comandi MQTT (es. frequenza invio, associazione paziente) per configurazione remota | F | Control | 0 | IMPL |
 | RQ-08 | Valutare soglie cliniche e generare alert per asma (tachipnea) | F | Processing | 0 | IMPL |
 | RQ-09 | Persistere le serie temporali cliniche su InfluxDB (via Node-RED) | F | Storage | 1 | IMPL |
-| RQ-10 | Gestire le schede paziente e le logiche anagrafiche su DB relazionale | F | Storage | 2 | PLAN — oggi solo `patient_id` (stringa libera) su `Reading`, nessuna entità Paziente/Anamnesi |
+| RQ-10 | Gestire le schede paziente e le logiche anagrafiche su DB relazionale | F | Storage | 2 | IMPL — entità `PatientRecord` (anagrafica + patologie/farmaci/allergie), endpoint `GET/PUT /devices/{id}/patient` |
 | RQ-11 | Visualizzare metriche e alert in tempo reale su dashboard Grafana | F | Dashboard | 1 | IMPL |
-| RQ-12 | Autenticazione con token JWT e isolamento dati per account | F | Auth | 0 | IMPL (singolo ruolo Caregiver; RBAC Medico/Paziente è PLAN) |
+| RQ-12 | Autenticazione con token JWT e isolamento dati per account (RBAC) | F | Auth | 0 | IMPL — RBAC multi-ruolo Medico/Paziente (`role`), ownership via `authorized_device`, audit log |
 | RQ-13 | Monitor in tempo reale e alert sull'app mobile (WebSocket/SSE) | F | App | 1 | IMPL |
 | RQ-14 | Associare un device hardware a un paziente specifico (tramite comando MQTT/BLE) | F | App | 2 | IMPL |
 | RQ-15 | Segnalare stati anomali (`device_status`) sopprimendo falsi allarmi fisiologici | F | Alerting | 1 | IMPL |

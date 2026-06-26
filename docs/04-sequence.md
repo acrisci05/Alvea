@@ -53,8 +53,8 @@ sequenceDiagram
     alt credenziali valide
         BE->>SQ: SELECT devices WHERE owner_id = caregiver.id
         SQ-->>BE: lista device (puo' essere vuota)
-        BE->>BE: create_access_token ({"sub": username})
-        BE-->>Client: 200 { access_token, token_type, device_id }
+        BE->>BE: create_access_token ({"sub": username, "role": role})
+        BE-->>Client: 200 { access_token, token_type, role, device_id }
         Client->>BE: GET /devices/{device_id}/latest (Bearer token)
         BE->>BE: get_current_user (decodifica JWT)
         BE-->>Client: ultima lettura del device
@@ -64,10 +64,11 @@ sequenceDiagram
 ```
 
 > Nota: `device_id` nella risposta di login è il primo device associato
-> al caregiver (None se non ne ha ancora registrato nessuno). Non esiste
-> un campo `role`: l'autenticazione odierna ha un solo tipo di account
-> (Caregiver), con isolamento dei dati per `owner_id` — vedi
-> `docs/03-er-schema.md`.
+> al caregiver (None se non ne ha ancora registrato nessuno). Il token e la
+> risposta includono il `role` (`caregiver` o `medico`): il controllo accessi
+> RBAC applica permessi diversi per ruolo e l'isolamento dei dati avviene per
+> `owner_id` tramite `authorized_device` — vedi `docs/03-er-schema.md` e
+> `docs/SICUREZZA.md`.
 
 ## 3) Configurazione da remoto del Dispositivo
 
@@ -79,8 +80,8 @@ sequenceDiagram
     participant MQ as Mosquitto (MQTT)
     participant ESP as ESP32 (Firmware)
 
-    App->>BE: POST /devices/{ID}/command { publish_period_s: 5 }
-    BE->>BE: verifica che il device appartenga al caregiver autenticato
+    App->>BE: POST /devices/{ID}/commands { publish_period_s: 5 }
+    BE->>BE: verifica ruolo/proprietà del device (authorized_device)
     BE->>MQ: publish alvea/devices/{ID}/commands (JSON)
     MQ-->>ESP: push su topic sottoscritto
     ESP->>ESP: mqtt_callback elabora payload
