@@ -70,7 +70,6 @@ def write_reading(reading: dict):
             # --- Field: valori numerici delle serie temporali ---
             .field("bpm",              float(reading.get("bpm") or 0))
             .field("skin_temperature", float(reading.get("skin_temperature") or 0))
-            .field("spo2",             float(reading.get("spo2") or 0))
             .field("respiration_rate", float(reading.get("respiration_rate") or 0))
             .field("sensor_contact",   1 if reading.get("sensor_contact") else 0)
 

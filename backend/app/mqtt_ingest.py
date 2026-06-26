@@ -1,11 +1,12 @@
 # mqtt_ingest.py - Task in background: consuma la telemetria da MQTT.
 #
-# Per ogni messaggio su alvea/monitor/data:
+# Per ogni messaggio sul topic di telemetria:
 #   1) valida il payload (Pydantic)
 #   2) assicura l'esistenza del device
 #   3) salva la lettura su DB (e opzionalmente su InfluxDB)
-#   4) valuta le soglie -> salva gli eventuali alert
-#   5) fa broadcast realtime (WebSocket + SSE) verso i client
+#   4) valuta le soglie (per-device se configurate) -> salva gli eventuali alert
+#   5) invia una notifica push al proprietario se c'è un alert critico
+#   6) fa broadcast realtime (WebSocket + SSE) verso i client
 #
 # Pattern derivato da test_mqtt/main.py del corso (aiomqtt + lifespan).
 
@@ -14,7 +15,7 @@ import json     # per decodificare il payload JSON che arriva dall'ESP32
 import aiomqtt  # libreria asincrona per connettersi al broker MQTT
 
 # Importa i moduli interni del backend
-from . import config, crud, alerts, influx
+from . import config, crud, alerts, influx, push
 from .database import AsyncSessionLocal  # fabbrica di sessioni DB
 from .realtime import publish_event      # funzione che manda i dati in real-time ai client
 from .schemas import ReadingIn           # schema Pydantic per validare il payload
@@ -76,7 +77,7 @@ async def listen_to_mqtt():
 
 
 async def _handle_message(payload_str: str):
-    # Gestisce un singolo messaggio MQTT ricevuto dall'ESP32.
+    # Gestisce un singolo messaggio MQTT di telemetria ricevuto dall'ESP32.
     # Il prefisso _ indica che è una funzione privata, usata solo internamente.
 
     # === STEP 1: VALIDAZIONE PAYLOAD ===
@@ -95,9 +96,12 @@ async def _handle_message(payload_str: str):
         print("[mqtt] payload non valido, scartato:", e)
         return
 
-    # === STEP 2, 3, 4: DATABASE ===
+    # "fired" raccoglie gli alert generati; lo dichiariamo qui per poterlo
+    # usare anche nel broadcast realtime fuori dal blocco DB.
+    fired = []
+
+    # === STEP 2, 3, 4, 5: DATABASE ===
     # Apre una sessione DB per tutte le operazioni di scrittura.
-    # "async with" garantisce che la sessione venga chiusa alla fine del blocco.
     async with AsyncSessionLocal() as db:
 
         # STEP 2: assicura che il device esista nel DB.
@@ -108,18 +112,34 @@ async def _handle_message(payload_str: str):
         saved = await crud.save_reading(db, reading)
 
         # STEP 3b: scrive su InfluxDB (solo se INFLUX_ENABLED=true in config.py)
-        # Se disabilitato, questa funzione esce subito senza fare nulla.
         influx.write_reading(reading)
 
         # STEP 4: valuta le soglie cliniche sulla lettura appena ricevuta.
-        # "fired" è una lista di alert (può essere vuota se tutto è nella norma).
-        fired = alerts.evaluate(reading)
+        # Usa le soglie configurate dal medico per questo device (se presenti),
+        # altrimenti i default globali (config.DEFAULT_THRESHOLDS).
+        thresholds = await crud.get_thresholds(db, reading["device_id"])
+        fired = alerts.evaluate(reading, thresholds)
 
         # Salva ogni alert generato nel DB, uno per uno.
         for a in fired:
             await crud.save_alert(db, reading["device_id"], a)
 
-    # === STEP 5: BROADCAST REALTIME ===
+        # STEP 5: se c'è almeno un alert critico, invia una notifica push al
+        # proprietario del device (se ha registrato dei token e il device ha owner).
+        critical = [a for a in fired if a["severity"] == "critical"]
+        if critical:
+            device = await crud.get_device(db, reading["device_id"])
+            if device and device.owner_id:
+                tokens = await crud.get_push_tokens_for_owner(db, device.owner_id)
+                a0 = critical[0]
+                await push.send_push(
+                    tokens,
+                    "Alvea — allarme critico",
+                    a0["message"],
+                    {"device_id": reading["device_id"]},
+                )
+
+    # === STEP 6: BROADCAST REALTIME ===
     # Manda i dati a tutti i client connessi (app mobile via WebSocket, dashboard via SSE).
     # Viene fatto FUORI dal blocco "async with db" perché non riguarda il DB:
     # anche se il broadcast fallisse, il dato è già salvato in modo sicuro.
@@ -127,11 +147,10 @@ async def _handle_message(payload_str: str):
         "type": "reading",                              # tipo di evento (il client lo usa per distinguere)
         "device_id": reading["device_id"],              # quale cavigliera ha prodotto i dati
         "patient_id": reading.get("patient_id"),        # paziente assegnato (può essere None)
-        "ts": str(saved.ts),                            # timestamp assegnato dal DB
+        "ts": str(saved.ts),                            # timestamp assegnato al dato
         "respiration_rate": reading.get("respiration_rate"),  # frequenza respiratoria (EDR)
         "bpm": reading.get("bpm"),                       # battito cardiaco
         "skin_temperature": reading.get("skin_temperature"),  # temperatura cutanea
-        "spo2": reading.get("spo2"),                     # saturazione ossigeno
         "battery_pct": reading.get("battery_pct"),        # batteria residua (può essere None se ADC guasto)
         "sensor_contact": reading.get("sensor_contact"), # fascia a contatto?
         "device_status": reading.get("device_status"),  # stato diagnostico testuale del firmware
@@ -157,7 +176,7 @@ async def _handle_alert_message(payload_str: str):
     Il firmware usa un formato diverso da quello generato da
     backend.alerts.evaluate(): {device_id, patient_id, parametro,
     descrizione, gravita, timestamp}. Qui lo traduciamo nel formato salvato
-    da crud.save_alert(): {kind, severity, message, value}.
+    da crud.save_alert(): {parameter, kind, severity, message, value}.
     """
     try:
         data = json.loads(payload_str)
@@ -166,8 +185,10 @@ async def _handle_alert_message(payload_str: str):
         print("[mqtt] alert payload non valido, scartato:", e)
         return
 
+    parametro = data.get("parametro", "unknown")
     alert = {
-        "kind": data.get("parametro", "unknown"),
+        "parameter": parametro,
+        "kind": parametro,
         "severity": _FIRMWARE_SEVERITY_MAP.get(data.get("gravita"), "warning"),
         "message": data.get("descrizione", ""),
         "value": None,  # il firmware non invia un valore numerico isolato per questi alert
@@ -177,6 +198,14 @@ async def _handle_alert_message(payload_str: str):
         await crud.ensure_device(db, device_id)
         saved = await crud.save_alert(db, device_id, alert)
 
+        # Notifica push anche per gli alert hardware critici provenienti dal device.
+        if alert["severity"] == "critical":
+            device = await crud.get_device(db, device_id)
+            if device and device.owner_id:
+                tokens = await crud.get_push_tokens_for_owner(db, device.owner_id)
+                await push.send_push(tokens, "Alvea — allarme dispositivo",
+                                     alert["message"], {"device_id": device_id})
+
     # Broadcast realtime: stesso canale usato per le letture, type diverso
     # così l'app può distinguere un evento "reading" da un alert standalone.
     await publish_event({
@@ -184,6 +213,7 @@ async def _handle_alert_message(payload_str: str):
         "device_id": device_id,
         "patient_id": data.get("patient_id"),
         "ts": str(saved.ts),
+        "parameter": alert["parameter"],
         "kind": alert["kind"],
         "severity": alert["severity"],
         "message": alert["message"],
