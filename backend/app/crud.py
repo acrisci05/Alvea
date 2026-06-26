@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import desc, func
 
-from . import models, schemas, auth
+from . import models, schemas, auth, config
 
 
 # ===================== CAREGIVER =====================
@@ -21,10 +21,13 @@ async def get_caregiver_by_username(db: AsyncSession, username: str):
     return res.scalars().first()
 
 async def create_caregiver(db: AsyncSession, data: schemas.CaregiverCreate):
-    """Crea un nuovo account caregiver. La password viene hashata con bcrypt."""
+    """Crea un nuovo account caregiver. La password viene hashata con bcrypt;
+    il ruolo (caregiver/medico) arriva dallo schema, con default "caregiver".
+    """
     user = models.Caregiver(
         username=data.username,
-        hashed_password=auth.hash_password(data.password)
+        hashed_password=auth.hash_password(data.password),
+        role=data.role,
     )
     db.add(user)
     await db.commit()
@@ -48,6 +51,13 @@ async def get_devices_for_owner(db: AsyncSession, owner_id: int):
     res = await db.execute(
         select(models.Device).where(models.Device.owner_id == owner_id)
     )
+    return res.scalars().all()
+
+async def get_all_devices(db: AsyncSession):
+    """Restituisce tutti i device del sistema.
+    Usata dal ruolo medico, che ha visione su tutti i pazienti (RBAC).
+    """
+    res = await db.execute(select(models.Device))
     return res.scalars().all()
 
 async def create_device(db: AsyncSession, data: schemas.DeviceCreate, owner_id: int):
@@ -104,7 +114,6 @@ async def save_reading(db: AsyncSession, r: dict):
         ts               = ts,                         # timestamp reale del firmware
         bpm              = r.get("bpm"),
         skin_temperature = r.get("skin_temperature"),  # nome allineato al firmware
-        spo2             = r.get("spo2"),
         respiration_rate = r.get("respiration_rate"),
         battery_pct      = r.get("battery_pct"),       # può essere None se ADC guasto
         sensor_contact   = r.get("sensor_contact"),
@@ -151,7 +160,6 @@ async def get_latest_reading(db: AsyncSession, device_id: str):
 # Parametri vitali su cui ha senso calcolare statistiche
 STAT_FIELDS = {
     "bpm":              models.Reading.bpm,
-    "spo2":             models.Reading.spo2,
     "respiration_rate": models.Reading.respiration_rate,
     "skin_temperature": models.Reading.skin_temperature,
     "battery_pct":      models.Reading.battery_pct,
@@ -162,7 +170,7 @@ async def get_stats(db: AsyncSession, device_id: str, hours: int = 24) -> dict:
     intervallo temporale specificato (default: ultime 24 ore).
 
     Usata da GET /devices/{id}/stats per mostrare nell'app i valori aggregati
-    del giorno: "SpO2 media 97%, min 94%, max 99%".
+    del giorno: "Frequenza respiratoria media 22, min 14, max 38".
 
     Parametri
     ----------
@@ -213,10 +221,11 @@ async def save_alert(db: AsyncSession, device_id: str, a: dict):
     """
     alert = models.Alert(
         device_id = device_id,
-        kind      = a["kind"],      # es. "spo2_low", "resp_high", "contact_lost"
-        severity  = a["severity"],  # "warning" | "critical" | "technical"
+        parameter = a.get("parameter"),  # es. "respiration_rate", "bpm", "contact"
+        kind      = a["kind"],           # es. "resp_high", "bpm_low", "contact_lost"
+        severity  = a["severity"],       # "warning" | "critical" | "technical"
         message   = a["message"],
-        value     = a.get("value"), # valore numerico che ha scatenato l'allarme
+        value     = a.get("value"),      # valore numerico che ha scatenato l'allarme
     )
     db.add(alert)
     await db.commit()
@@ -234,3 +243,115 @@ async def get_recent_alerts(db: AsyncSession, device_id: str, limit: int = 50):
         .limit(limit)
     )
     return res.scalars().all()
+
+
+# ===================== SOGLIE PER-DEVICE (configurabili dal medico) =======
+
+# Le 12 chiavi delle soglie cliniche, condivise tra modello, schema e config.
+_THRESHOLD_FIELDS = (
+    "resp_warn_low", "resp_warn_high", "resp_crit_low", "resp_crit_high",
+    "bpm_warn_low", "bpm_warn_high", "bpm_crit_low", "bpm_crit_high",
+    "temp_warn_low", "temp_warn_high", "temp_crit_low", "temp_crit_high",
+)
+
+async def get_threshold_row(db: AsyncSession, device_id: str):
+    """Restituisce la riga DeviceThreshold del device, o None se assente."""
+    res = await db.execute(
+        select(models.DeviceThreshold).where(models.DeviceThreshold.device_id == device_id)
+    )
+    return res.scalars().first()
+
+async def get_thresholds(db: AsyncSession, device_id: str) -> dict:
+    """Soglie effettive per un device: configurazione dedicata se presente,
+    altrimenti i default di config. Restituisce sempre tutte e 12 le chiavi,
+    pronte per essere passate ad alerts.evaluate().
+    """
+    row = await get_threshold_row(db, device_id)
+    if row is None:
+        return dict(config.DEFAULT_THRESHOLDS)
+    return {f: getattr(row, f) for f in _THRESHOLD_FIELDS}
+
+async def upsert_thresholds(db: AsyncSession, device_id: str, data: dict, username: str):
+    """Crea o aggiorna le soglie del device e registra l'autore della modifica."""
+    row = await get_threshold_row(db, device_id)
+    if row is None:
+        row = models.DeviceThreshold(device_id=device_id)
+        db.add(row)
+    for f in _THRESHOLD_FIELDS:
+        setattr(row, f, data[f])
+    row.updated_by = username
+    await db.commit()
+    await db.refresh(row)
+    return row
+
+
+# ===================== SCHEDA PAZIENTE / ANAMNESI =====================
+
+async def get_patient_record(db: AsyncSession, device_id: str):
+    """Restituisce la scheda paziente del device, o None se non presente."""
+    res = await db.execute(
+        select(models.PatientRecord).where(models.PatientRecord.device_id == device_id)
+    )
+    return res.scalars().first()
+
+async def upsert_patient_record(db: AsyncSession, device_id: str, data: dict, username: str):
+    """Crea o aggiorna la scheda paziente; aggiorna solo i campi forniti."""
+    row = await get_patient_record(db, device_id)
+    if row is None:
+        row = models.PatientRecord(device_id=device_id)
+        db.add(row)
+    for k, v in data.items():
+        setattr(row, k, v)
+    row.updated_by = username
+    await db.commit()
+    await db.refresh(row)
+    return row
+
+
+# ===================== AUDIT LOG =====================
+
+async def write_audit(db: AsyncSession, action: str, username: str | None = None,
+                      role: str | None = None, resource: str | None = None,
+                      detail: str | None = None, ip: str | None = None):
+    """Registra (append-only) un'operazione rilevante nel log di audit."""
+    entry = models.AuditLog(action=action, username=username, role=role,
+                            resource=resource, detail=detail, ip=ip)
+    db.add(entry)
+    await db.commit()
+    return entry
+
+async def get_audit_logs(db: AsyncSession, limit: int = 100, device_id: str | None = None):
+    """Restituisce le ultime voci dell'audit log (le più recenti per prime),
+    eventualmente filtrate per device. Consultabile solo dal medico.
+    """
+    q = select(models.AuditLog)
+    if device_id:
+        q = q.where(models.AuditLog.resource == device_id)
+    q = q.order_by(desc(models.AuditLog.ts)).limit(limit)
+    res = await db.execute(q)
+    return res.scalars().all()
+
+
+# ===================== PUSH TOKEN =====================
+
+async def register_push_token(db: AsyncSession, token: str, owner_id: int,
+                              device_id: str | None = None):
+    """Registra (o aggiorna) un Expo push token associandolo al proprietario.
+
+    Se il token esiste già, ne aggiorna proprietario e device: lo stesso
+    telefono può cambiare account o device monitorato.
+    """
+    existing = await db.get(models.PushToken, token)
+    if existing:
+        existing.owner_id = owner_id
+        existing.device_id = device_id
+    else:
+        db.add(models.PushToken(token=token, owner_id=owner_id, device_id=device_id))
+    await db.commit()
+
+async def get_push_tokens_for_owner(db: AsyncSession, owner_id: int):
+    """Restituisce la lista dei push token registrati da un proprietario."""
+    res = await db.execute(
+        select(models.PushToken.token).where(models.PushToken.owner_id == owner_id)
+    )
+    return [row[0] for row in res.all()]

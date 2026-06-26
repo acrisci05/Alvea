@@ -1,43 +1,54 @@
 # schemas.py - Schemi Pydantic per validazione I/O (request/response FastAPI
 # e validazione del payload MQTT in ingresso).
 #
-# NOTA: questo file era assente nell'archivio caricato ed è stato
-# ricostruito sulla base di:
-#   - tutti i riferimenti a "schemas.XYZ" presenti in main.py e crud.py
-#   - il payload reale pubblicato dal firmware su .../telemetry
-#     (vedi main_real_mqtt.py, main_sim_mqtt.py, sensor_sim.py)
-#   - i campi del modello ORM in models.py (allineati al firmware)
-#
-# Se lo schemas.py originale del progetto differisce nei dettagli (es.
-# validatori aggiuntivi, vincoli di lunghezza sullo username), va
-# confrontato e riconciliato con questa versione.
+# Gli schemi qui definiti descrivono il "contratto" dati tra:
+#   - app mobile  <-> backend (login, letture, alert, comandi, push);
+#   - firmware    <-> backend (payload di telemetria ReadingIn);
+#   - medico      <-> backend (configurazione soglie, scheda paziente).
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 
 # ===================== CAREGIVER / AUTH =====================
 
 class CaregiverCreate(BaseModel):
-    """Payload di POST /register."""
+    """Payload di POST /register.
+
+    Il ruolo è opzionale (default "caregiver"): l'auto-registrazione di un
+    medico è ammessa solo a scopo didattico. L'app può inviare anche dei dati
+    anagrafici del paziente insieme alla registrazione: campi extra non
+    dichiarati qui vengono ignorati da Pydantic senza errori.
+    """
     username: str
     password: str
+    role: Literal["caregiver", "medico"] = "caregiver"
 
 
 class CaregiverResponse(BaseModel):
-    """Risposta di POST /register (la password hashata non viene mai esposta)."""
+    """Risposta di POST /register e GET /me (la password hashata non si espone)."""
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     username: str
+    role: str
 
 
 class Token(BaseModel):
-    """Risposta di POST /login."""
+    """Risposta di POST /login.
+
+    Oltre al token JWT, restituiamo il ruolo e il device_id principale
+    dell'utente: l'app mobile li usa subito dopo il login per scegliere la
+    schermata (paziente/medico) e per sapere quale device interrogare
+    (vedi loginUser()/config.js nell'app, che si aspetta
+    { access_token, device_id, role }).
+    """
     access_token: str
     token_type: str = "bearer"
+    role: str = "caregiver"
+    device_id: Optional[str] = None
 
 
 # ===================== DEVICE =====================
@@ -58,10 +69,10 @@ class DeviceResponse(BaseModel):
 
 
 class DeviceCommand(BaseModel):
-    """Payload di POST /devices/{id}/command.
+    """Payload di POST /devices/{id}/commands.
 
     Campi allineati a quanto il firmware accetta in mqtt_callback /
-    mqtt_command_callback (main_real_mqtt.py / main_sim_mqtt.py):
+    ble_command_callback (main_real_mqtt.py / main_real_ble.py):
       - publish_period_s: nuova frequenza di invio telemetria (secondi)
       - patient_id: assegna (o rimuove, passando None) il paziente al device
     Tutti i campi sono opzionali: il backend invia solo quelli effettivamente
@@ -81,6 +92,7 @@ class ReadingIn(BaseModel):
     main_real_mqtt.py / sensor_sim.py:
       device_id, patient_id, timestamp, bpm, skin_temperature,
       respiration_rate, battery_pct, sensor_contact, device_status, source.
+    Il dispositivo non ha sensore SpO2, quindi non esiste un campo di saturazione.
     """
     device_id: str
     patient_id: Optional[str] = None
@@ -90,18 +102,13 @@ class ReadingIn(BaseModel):
     respiration_rate: float = 0.0
     # battery_pct può essere None se l'ADC della batteria è guasto
     battery_pct: Optional[float] = None
-    # spo2 non è ancora prodotto dal firmware attuale (né main_real_mqtt.py
-    # né sensor_sim.py lo includono nel payload): lo manteniamo opzionale
-    # qui e in alerts.py/models.py per quando verrà aggiunto, senza che
-    # la validazione del payload odierno fallisca.
-    spo2: Optional[float] = None
     sensor_contact: bool = True
     device_status: Optional[str] = None
     source: Optional[str] = None
 
 
 class ReadingResponse(BaseModel):
-    """Risposta per GET /devices/{id}/readings e /latest."""
+    """Risposta per GET /devices/{id}/history e /latest."""
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -111,7 +118,6 @@ class ReadingResponse(BaseModel):
     bpm: Optional[float] = None
     skin_temperature: Optional[float] = None
     respiration_rate: Optional[float] = None
-    spo2: Optional[float] = None
     battery_pct: Optional[float] = None
     sensor_contact: Optional[bool] = None
     device_status: Optional[str] = None
@@ -127,7 +133,100 @@ class AlertResponse(BaseModel):
     id: int
     device_id: str
     ts: datetime
+    parameter: Optional[str] = None
     kind: str
     severity: str
     message: str
     value: Optional[float] = None
+
+
+# ===================== SOGLIE CLINICHE (config. dal medico) =====================
+
+class ThresholdConfig(BaseModel):
+    """Soglie cliniche per-device impostabili dal medico (PUT .../thresholds).
+
+    Il validatore controlla la coerenza degli ordinamenti per evitare di
+    salvare soglie senza senso (es. soglia critica più permissiva della warning).
+    """
+    resp_warn_low: float
+    resp_warn_high: float
+    resp_crit_low: float
+    resp_crit_high: float
+    bpm_warn_low: int
+    bpm_warn_high: int
+    bpm_crit_low: int
+    bpm_crit_high: int
+    temp_warn_low: float
+    temp_warn_high: float
+    temp_crit_low: float
+    temp_crit_high: float
+
+    @model_validator(mode="after")
+    def _check_order(self):
+        # Per ogni parametro: crit_low <= warn_low <= warn_high <= crit_high.
+        for p in ("resp", "bpm", "temp"):
+            cl = getattr(self, f"{p}_crit_low")
+            wl = getattr(self, f"{p}_warn_low")
+            wh = getattr(self, f"{p}_warn_high")
+            ch = getattr(self, f"{p}_crit_high")
+            if not (cl <= wl <= wh <= ch):
+                raise ValueError(
+                    f"Soglie '{p}' incoerenti: atteso crit_low <= warn_low <= warn_high <= crit_high"
+                )
+        return self
+
+
+class ThresholdResponse(ThresholdConfig):
+    device_id: str
+    updated_at: Optional[datetime] = None
+    updated_by: Optional[str] = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ===================== SCHEDA PAZIENTE / ANAMNESI =====================
+
+class PatientRecordUpdate(BaseModel):
+    """Payload di PUT /devices/{id}/patient (tutti i campi opzionali)."""
+    full_name: Optional[str] = None
+    birth_date: Optional[str] = None
+    sex: Optional[str] = None
+    weight_kg: Optional[float] = None
+    blood_type: Optional[str] = None
+    pathologies: Optional[str] = None
+    medications: Optional[str] = None
+    allergies: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class PatientRecordResponse(PatientRecordUpdate):
+    device_id: str
+    updated_at: Optional[datetime] = None
+    updated_by: Optional[str] = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ===================== NOTIFICHE PUSH =====================
+
+class PushTokenIn(BaseModel):
+    """Payload di POST /register-token (inviato dall'app, vedi api.js).
+
+    L'app invia l'Expo push token e il device monitorato; il backend lo
+    associa all'utente autenticato (Bearer) per le notifiche sugli alert critici.
+    """
+    token: str
+    device_id: Optional[str] = None
+
+
+# ===================== AUDIT LOG =====================
+
+class AuditLogResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    ts: datetime
+    username: Optional[str] = None
+    role: Optional[str] = None
+    action: str
+    resource: Optional[str] = None
+    detail: Optional[str] = None
+    ip: Optional[str] = None
