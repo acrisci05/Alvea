@@ -16,6 +16,7 @@ from sensor_battery import BatteryMonitor
 from alerts import AlertManager
 import resp_edr
 import ntp_time
+from ntp_time import unix_now
 import shell_log
 
 try:
@@ -24,7 +25,7 @@ try:
 except ImportError:
     raise RuntimeError("File secrets.py mancante o corrotto.")
 
-print("=== ALVEA: AVVIO ARCHITETTURA DI PRODUZIONE ===")
+print("ALVEA: AVVIO ARCHITETTURA DI PRODUZIONE")
 
 # --- VARIABILI DI CONFIGURAZIONE DINAMICA ---
 current_publish_period = config.DEFAULT_PUBLISH_PERIOD_S
@@ -61,6 +62,7 @@ def mqtt_callback(topic, msg):
 
 
 # --- INIZIALIZZAZIONE RETE (BLOCCANTE SOLO ALL'AVVIO) ---
+
 # All'avvio e' necessario attendere la prima connessione Wi-Fi, perche':
 #  1. serve per sincronizzare l'RTC via NTP (timestamp Unix corretti);
 #  2. evita di iniziare a generare dati "ERR/WARN" inutili nei primi secondi.
@@ -77,6 +79,11 @@ while not wifi_mga.is_connected():
 # --- SINCRONIZZAZIONE OROLOGIO ---
 if wifi_mga.is_connected():
     ntp_time.sync_time()
+    try:
+        _ip = wifi_mga.wlan.ifconfig()[0]
+        print("[RETE] IP ESP32:", _ip, "| Broker MQTT:", config.MQTT_BROKER, "porta", config.MQTT_PORT)
+    except Exception as _e:
+        print("[RETE] Impossibile leggere ifconfig:", _e)
 else:
     print("[NTP] Saltata sincronizzazione: nessuna connessione Wi-Fi disponibile.")
 
@@ -122,9 +129,7 @@ while True:
         temp_val = thermo.read()
 
         if not contact_ecg:
-            # Senza contatto ECG non sono disponibili BPM e EDR (respiro):
-            # e' la condizione bloccante primaria in questa architettura,
-            # essendo l'ECG l'unico sensore biomedicale del dispositivo.
+            # Senza contatto ECG non sono disponibili BPM e EDR (respiro): condizione bloccante primaria dell'architettura
             status_string = "ERR_ECG_LEADS_OFF"
         elif temp_val is None:
             status_string = "ERR_TEMP_SENSOR_FAULT"
@@ -166,7 +171,7 @@ while True:
         reading = {
             "device_id": config.DEVICE_ID,
             "patient_id": current_patient_id,
-            "timestamp": time.time(),
+            "timestamp": unix_now(),
             "bpm": float(bpm),
             "skin_temperature": float(final_temp),
             "respiration_rate": float(resp_rate),

@@ -1,11 +1,11 @@
 # alerts.py - Generazione e invio di alert locali rilevati dal device.
-#
 # Questo modulo ha il compito di generare alert sia di tipo "device/hardware" (guasti/assenza di contatto dei sensori, batteria scarica) sia l'alert
 # clinico basato su soglia per la frequenza respiratoria (via EDR), con un formato dati compatibile con quanto richiesto
 
 import time
 import json
 import config
+from ntp_time import unix_now
 
 
 class AlertManager:
@@ -26,7 +26,7 @@ class AlertManager:
             "parametro": parametro,
             "descrizione": descrizione,
             "gravita": gravita,  
-            "timestamp": time.time(),
+            "timestamp": unix_now(),
         }
 
     def _send(self, alert_dict):

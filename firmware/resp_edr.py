@@ -12,6 +12,7 @@ MIN_RR_FOR_EDR = 10    # numero minimo di RR per tentare la stima del respiro
 
 EDR_FILTER_ALPHA = 0.2   # costante del filtro IIR passa-basso sulla serie RR
 PHYSIO_RESP_MIN = 8.0    # limiti fisiologici plausibili (atti/min) per scartare stime spurie
+
 # Il limite superiore e' volutamente piu' alto della soglia di alert
 # clinico (DEFAULT_ALARM_RESP_MAX = 40, vedi config.py): una tachipnea
 # severa in eta' pediatrica (crisi d'asma avanzata) puo' superare

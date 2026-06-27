@@ -8,7 +8,7 @@ from transport_ble import BLEPeripheral
 from alerts import AlertManager
 import shell_log
 
-print("== ALVEA TEST-RIG :: SIMULATORE BLE ASINCRONO (modalita' alternativa/demo) ==")
+print("ALVEA TEST-RIG :: SIMULATORE BLE ASINCRONO (modalita' alternativa/demo)")
 
 # --- VARIABILE DI CONFIGURAZIONE DINAMICA ---
 current_publish_period = config.DEFAULT_PUBLISH_PERIOD_S

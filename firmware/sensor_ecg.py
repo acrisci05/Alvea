@@ -51,9 +51,7 @@ class ECGMonitor:
     """Wrapper hardware AD8232 con Ring Buffer statico privo di allocazioni dinamiche."""
 
     def __init__(self):
-        self.adc = machine.ADC(machine.Pin(PIN_ECG))
-        self.adc.atten(machine.ADC.ATTN_11DB)     
-        self.adc.width(machine.ADC.WIDTH_12BIT)   
+        self.adc = machine.ADC(machine.Pin(PIN_ECG), atten=machine.ADC.ATTN_11DB)
         self.lo_plus = machine.Pin(PIN_LO_PLUS, machine.Pin.IN)
         self.lo_minus = machine.Pin(PIN_LO_MINUS, machine.Pin.IN)
         
@@ -89,7 +87,9 @@ class ECGMonitor:
         return self.lo_plus.value() == 0 or self.lo_minus.value() == 0
 
     def read_raw(self):
-        return self.adc.read()
+        # La soglia di rilevamento picchi e' adattiva (mean + frazione del max), quindi
+        # il risultato e' invariante rispetto alla scala assoluta.
+        return self.adc.read_u16() >> 4
 
     def reset(self):
         self._deriv_sq = [0] * self._deriv_win

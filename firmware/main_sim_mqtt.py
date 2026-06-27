@@ -62,6 +62,11 @@ while not wifi_mga.is_connected():
 
 if wifi_mga.is_connected():
     ntp_time.sync_time()
+    try:
+        _ip = wifi_mga.wlan.ifconfig()[0]
+        print("[RETE] IP ESP32:", _ip, "| Broker MQTT:", config.MQTT_BROKER, "porta", config.MQTT_PORT)
+    except Exception as _e:
+        print("[RETE] Impossibile leggere ifconfig:", _e)
 else:
     print("[NTP] Saltata sincronizzazione: nessuna connessione Wi-Fi disponibile.")
 

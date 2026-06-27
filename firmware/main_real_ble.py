@@ -1,12 +1,7 @@
 # main_real_ble.py - Firmware ALTERNATIVO via BLE (demo/test locale).
 #
-# Il campo "timestamp" qui sotto NON e' sincronizzato via NTP (a differenza
-# della pipeline MQTT) perche' in modalita' BLE-only non c'e' garanzia di
-# accesso a Internet
-#
-# Architettura sensoristica: ECG (AD8232) come unica fonte di BPM e
-# Frequenza Respiratoria derivata dagli intervalli RR
-# dell'ECG (EDR - ECG-Derived Respiration), tramite il modulo resp_edr.py.
+# Il campo "timestamp" NON e' sincronizzato via NTP perche' in modalita' BLE-only
+# non c'e' garanzia di accesso a Internet
 
 import time
 import json
@@ -20,7 +15,7 @@ from alerts import AlertManager
 import resp_edr
 import shell_log
 
-print("=== ALVEA: AVVIO ARCHITETTURA BLE (modalita' alternativa/demo) ===")
+print("ALVEA: AVVIO ARCHITETTURA BLE (modalita' alternativa/demo)")
 
 # --- VARIABILE DI CONFIGURAZIONE DINAMICA ---
 # Aggiornabile a runtime dal medico tramite scrittura BLE sulla characteristic di comando
@@ -90,9 +85,7 @@ while True:
 
         # Diagnostica Hardware
         if not contact_ecg:
-            # Senza contatto ECG non sono disponibili BPM e EDR (respiro):
-            # e' la condizione bloccante primaria in questa architettura,
-            # essendo l'ECG l'unico sensore biomedicale del dispositivo.
+            # Senza contatto ECG non sono disponibili BPM e EDR (respiro): condizione bloccante primaria nell'architettura.
             status_string = "ERR_ECG_LEADS_OFF"
         elif temp_val is None:
             status_string = "ERR_TEMP_SENSOR_FAULT"
