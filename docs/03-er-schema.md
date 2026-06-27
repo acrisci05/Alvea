@@ -96,7 +96,7 @@ erDiagram
   0..N Alert, 0..1 DeviceThreshold e 0..1 PatientRecord. Un Device può esistere
   *senza* owner (la telemetria può arrivare prima dell'associazione manuale:
   vedi `crud.ensure_device`).
-- **Nessun campo SpO2:** il dispositivo ha un solo sensore biomedicale,
+- **Sensoristica:** il dispositivo ha un solo sensore biomedicale,
   l'ECG (AD8232). BPM e frequenza respiratoria (via EDR) derivano da quello;
   la temperatura cutanea da un termistore NTC analogico separato.
 - **Ruoli (RBAC):** il campo `CAREGIVER.role` distingue `caregiver` (lato

@@ -46,12 +46,9 @@ Progetto **Alvea** — dispositivo indossabile da caviglia per il monitoraggio d
 
 ## Nota sull'architettura sensoristica
 
-Una versione precedente della progettazione prevedeva un sensore PPG
-(MAX30102) per la misura di SpO2 e frequenza respiratoria, oltre a un
-termometro digitale DS18B20. L'implementazione realizzata ha sostituito
-questo approccio con un **solo sensore biomedicale**, l'ECG (AD8232): da
-esso si derivano sia il BPM sia, tramite la tecnica EDR (ECG-Derived
-Respiration su Aritmia Sinusale Respiratoria), la frequenza respiratoria,
-mentre la temperatura cutanea è letta da un termistore NTC analogico. Il
-payload JSON, gli endpoint del backend e l'app mobile sono coerenti con
-questa scelta: **non esiste alcun campo SpO2** nel contratto dati reale.
+L'implementazione realizzata adotta un **solo sensore biomedicale**, l'ECG
+(AD8232): da esso si derivano sia il BPM sia, tramite la tecnica EDR
+(ECG-Derived Respiration su Aritmia Sinusale Respiratoria), la frequenza
+respiratoria, mentre la temperatura cutanea è letta da un termistore NTC
+analogico separato. Il payload JSON, gli endpoint del backend e l'app
+mobile sono coerenti con questa architettura.

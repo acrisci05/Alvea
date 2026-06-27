@@ -17,7 +17,6 @@
 \usepackage{enumitem}
 \usepackage{xcolor}
 \usepackage{fancyhdr}
-\usepackage{lastpage}
 \usepackage{titlesec}
 \usepackage{caption}
 \usepackage[hidelinks,colorlinks=true,linkcolor=black,urlcolor=blue!60!black,citecolor=blue!60!black]{hyperref}
@@ -29,19 +28,26 @@
 \newcommand{\PLAN}{\textcolor{planorange}{\textbf{Progettato}}}
 \newcommand{\PART}{\textcolor{planorange}{\textbf{Parziale}}}
 
-% --- intestazione / pie' di pagina -----------------------------------
+% --- intestazione / pie' di pagina (senza numeri di pagina) ----------
 \pagestyle{fancy}
 \fancyhf{}
 \lhead{\small Alvea}
 \rhead{\small Gruppo 04 -- A.A. 2025/2026}
-\cfoot{\small Pagina \thepage\ di \pageref{LastPage}}
+\cfoot{}
 \renewcommand{\headrulewidth}{0.3pt}
-\renewcommand{\footrulewidth}{0.3pt}
+\renewcommand{\footrulewidth}{0pt}
+% Nessun numero di pagina in tutto il documento.
+\pagenumbering{gobble}
 
 \titleformat{\section}{\large\bfseries}{\thesection}{0.6em}{}
 \titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{0.6em}{}
 
 \newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+
+% Indice senza puntini di guida (i numeri di pagina sono disattivati).
+\makeatletter
+\renewcommand{\@dotsep}{10000}
+\makeatother
 
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{0.5em}
@@ -71,37 +77,40 @@ classificazioni descritte hanno finalità esclusivamente accademiche e dimostrat
 \end{center}
 
 \vspace{0.6em}
+\newpage
 {\small\renewcommand{\contentsname}{Indice}\tableofcontents}
-\vspace{0.8em}
-\hrule
-\vspace{0.6em}
 
 % =====================================================================
+\newpage
 \section{Descrizione del Sistema}
 
-Il progetto \textbf{Alvea} nasce come soluzione ingegneristica per il monitoraggio continuo, non invasivo e in tempo reale dell'asma pediatrico. L'architettura prevede un dispositivo indossabile periferico (posizionato sulla caviglia del bambino) progettato per la \textbf{sorveglianza attiva}. L'obiettivo primario è rilevare precocemente i marcatori di una crisi asmatica (ipossia, tachipnea e tachicardia compensativa), distinguendo in modo robusto gli allarmi clinici dai guasti hardware o dal distacco accidentale del sensore.
+Il progetto \textbf{Alvea} nasce come soluzione ingegneristica per il monitoraggio continuo, non invasivo e in tempo reale dell'asma pediatrico. L'architettura prevede un dispositivo indossabile periferico (posizionato sulla caviglia del bambino) progettato per la \textbf{sorveglianza attiva}. L'obiettivo primario è rilevare precocemente i marcatori di una crisi asmatica che il dispositivo è in grado di misurare --- la \textbf{tachipnea} (aumento della frequenza respiratoria) e la \textbf{tachicardia compensativa} innescata dal distress respiratorio --- distinguendo in modo robusto gli allarmi clinici dai guasti hardware o dal distacco accidentale del sensore.
 
 I dati biomedici grezzi vengono acquisiti da un \textbf{Edge Node basato su ESP32} ad alta efficienza e trasmessi a un'infrastruttura software (Backend + Node-RED + InfluxDB + Grafana). Il sistema è nativamente \textbf{bidirezionale}, consentendo al medico di inviare configurazioni (es. variazione della frequenza di campionamento, associazione paziente-dispositivo) direttamente al dispositivo.
 
 \subsection{Parametri biomedicali misurati}
+
+Il dispositivo dispone di un \textbf{unico sensore biomedicale}, il front-end ECG (AD8232): da esso si ricavano sia la frequenza cardiaca sia, per via derivata, la frequenza respiratoria. L'intera telemetria biomedicale poggia quindi su questo singolo front-end, integrato dalla temperatura cutanea (termistore NTC) e dalla stima del livello di batteria.
+
 \begin{itemize}[leftmargin=1.3em,itemsep=2pt]
-  \item \textbf{Frequenza Respiratoria (Atti/min)} -- stimata tramite la tecnica EDR (\emph{ECG-Derived Respiration}): gli intervalli RR dell'elettrocardiogramma vengono filtrati con un filtro IIR passa-basso che isola la modulazione lenta dovuta all'Aritmia Sinusale Respiratoria (il battito accelera in inspirazione e decelera in espirazione), da cui si stima il numero di atti respiratori al minuto, per identificare tachipnea da sforzo respiratorio.
-  \item \textbf{Frequenza Cardiaca (BPM)} -- misurata per intercettare l'inevitabile tachicardia compensativa innescata dal distress respiratorio.
+  \item \textbf{Frequenza Respiratoria (atti/min)} -- stimata tramite la tecnica EDR (\emph{ECG-Derived Respiration}): gli intervalli RR dell'elettrocardiogramma vengono filtrati con un filtro IIR passa-basso che isola la modulazione lenta dovuta all'Aritmia Sinusale Respiratoria (il battito accelera in inspirazione e decelera in espirazione), da cui si stima il numero di atti respiratori al minuto, per identificare la tachipnea da sforzo respiratorio.
+  \item \textbf{Frequenza Cardiaca (BPM)} -- misurata dall'ECG per intercettare l'inevitabile tachicardia compensativa innescata dal distress respiratorio.
   \item \textbf{Temperatura Cutanea ($^\circ$C)} -- rilevazione periferica alla caviglia tramite termistore NTC.
   \item \textbf{Livello di carica della batteria (\texttt{battery\_pct})} -- stima percentuale tramite lettura ADC di un partitore resistivo, per la generazione di un allarme tecnico dedicato in caso di batteria scarica.
   \item \textbf{Stato diagnostico} (\texttt{device\_status}) -- stringa generata dal firmware che valida la qualità del dato clinico e segnala errori tecnici (es. \texttt{ERR\_ECG\_LEADS\_OFF}).
 \end{itemize}
 
 % =====================================================================
+\newpage
 \section{Architettura del Sistema e Vincoli Progettuali}
 
-L'architettura adotta una forte \textbf{separazione delle responsabilità}. Il dispositivo Edge non si limita a inviare dati grezzi, ma effettua un pre-processing matematico avanzato a latenza zero tramite l'ESP32. Le soglie cliniche di interpretazione dei parametri restano competenza del backend (Node-RED): il firmware si limita a fornire valori puliti e uno stato di qualità del dato.
+L'architettura adotta una forte \textbf{separazione delle responsabilità}. Il dispositivo Edge non si limita a inviare dati grezzi, ma effettua un pre-processing matematico avanzato a latenza zero tramite l'ESP32. La valutazione clinica multi-parametro e multi-livello resta competenza del backend (FastAPI e Node-RED): il firmware fornisce valori puliti, uno stato di qualità del dato e un numero ristretto di allarmi autonomi di sicurezza (vedi Sezione~4).
 
 \subsection{Sensori e interfacce logiche}
 \begin{enumerate}[leftmargin=1.5em,itemsep=3pt]
   \item \textbf{Frequenza Cardiaca e Respiratoria (AD8232, EDR).} Front-end analogico ECG campionato a \textbf{250 Hz (GPIO34)}. Il BPM è ricavato mediante un algoritmo Pan-Tompkins ottimizzato con \textbf{Ring Buffer statici} per evitare allocazioni dinamiche (zero Garbage Collector) e garantire stabilità in produzione. I pin GPIO32 (LO+) e GPIO33 (LO--) forniscono il rilevamento leads-off, unica fonte del flag di aderenza cutanea (\texttt{sensor\_contact}), essendo l'ECG l'unico sensore biomedicale del dispositivo. Dagli stessi intervalli RR, raccolti su una finestra estesa di 30 secondi distinta da quella più breve usata per il BPM istantaneo, si deriva la Frequenza Respiratoria tramite la tecnica EDR (\emph{ECG-Derived Respiration}): un \textbf{Filtro IIR Passa-Basso} ($\alpha = 0.2$) isola la componente oscillatoria lenta dovuta all'Aritmia Sinusale Respiratoria, da cui si stima il numero di atti respiratori al minuto contando gli attraversamenti della media mobile del segnale filtrato.
   \item \textbf{Temperatura cutanea (Termistore NTC).} Sensore analogico, campionato su ADC1 (\textbf{GPIO35}), per la rilevazione della temperatura periferica, fisiologicamente più bassa rispetto a quella interna. Il valore grezzo letto dall'ADC è linearizzato via software per ottenere la temperatura in gradi Celsius.
-  \item \textbf{Livello di batteria.} Una cella LiPo a singola tensione è monitorata tramite un partitore resistivo collegato a un canale ADC1 dedicato (GPIO25), distinto e non in conflitto con i canali usati da ECG e sensore di temperatura.
+  \item \textbf{Livello di batteria.} La tensione è monitorata tramite un partitore resistivo collegato a un canale \textbf{ADC1 dedicato (GPIO36)}, distinto e non in conflitto con i canali usati da ECG e sensore di temperatura. La scelta di un pin ADC1 è vincolante: i canali ADC2 dell'ESP32 (come il GPIO25) sono condivisi internamente con la radio Wi-Fi e risultano inutilizzabili mentre la connessione di rete è attiva.
 \end{enumerate}
 
 \begin{table}[h]
@@ -115,12 +124,13 @@ L'architettura adotta una forte \textbf{separazione delle responsabilità}. Il d
 Front-end ECG AD8232 & ADC1 -- GPIO34 (12 bit, 250 Hz) & Tensione analogica (onda ECG) \\
 Leads-off AD8232 & GPIO32 (LO+), GPIO33 (LO--) & Digitale (rilevamento aderenza elettrodi) \\
 Termistore NTC & ADC1 -- GPIO35 (12 bit) & Temperatura cutanea, linearizzata via software \\
-Monitoraggio batteria & ADC1 -- GPIO25 (partitore resistivo) & Percentuale di carica residua stimata \\
+Monitoraggio batteria & ADC1 -- GPIO36 (partitore resistivo) & Percentuale di carica residua stimata \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
 % =====================================================================
+\newpage
 \section{Pipeline Software Asincrona e Bidirezionale}
 
 L'ESP32 utilizza una macchina a stati asincrona per garantire continuità medica anche in assenza di rete. La trasmissione wireless impiega il protocollo \textbf{MQTT}. Il sistema pubblica la telemetria e, simultaneamente, è \textbf{in ascolto} per le configurazioni. È inoltre disponibile un trasporto alternativo via \textbf{Bluetooth Low Energy (BLE)}, pensato come modalità di test locale e demo quando non è disponibile una rete Wi-Fi/broker, e non come percorso dati alternativo per la consegna del progetto.
@@ -146,43 +156,48 @@ Il payload canonico JSON trasmesso sul topic \texttt{alvea/devices/\{ID\}/teleme
 \subsection{Configurazione Remota dal Medico}
 Il microcontrollore sottoscrive al momento dell'avvio il topic \texttt{alvea/devices/\{ID\}/commands}. Quando il medico altera i parametri (es. \texttt{\{"publish\_period\_s": 5\}} oppure \texttt{\{"patient\_id": "p\_0007"\}}) dalla dashboard, l'ESP32 intercetta il messaggio via callback e aggiorna a runtime, in memoria, la frequenza di trasmissione e l'associazione paziente-dispositivo, senza necessità di riavvio. La stessa logica di configurazione è disponibile, con parità funzionale, anche sul trasporto BLE tramite scrittura su una characteristic dedicata.
 
-\subsection{Alert Tecnici Generati dal Firmware}
-Oltre alla telemetria periodica, il firmware pubblica autonomamente, sul topic \texttt{alvea/devices/\{ID\}/alerts}, allarmi di natura tecnica non derivabili dalla sola analisi delle soglie cliniche lato backend: guasto persistente di un sensore (elettrodi ECG scollegati, sensore di temperatura non disponibile) e batteria scarica. Per evitare di generare un alert per ogni singolo glitch transitorio, una condizione viene segnalata solo dopo 5 letture consecutive anomale, e un secondo alert di risoluzione viene generato non appena la condizione rientra.
+\subsection{Alert Generati dal Firmware}
+Oltre alla telemetria periodica, il firmware pubblica autonomamente sul topic \texttt{alvea/devices/\{ID\}/alerts} un insieme ristretto di allarmi. Si tratta di allarmi \textbf{tecnici} non derivabili dalla sola analisi delle soglie cliniche lato backend (guasto persistente di un sensore: elettrodi ECG scollegati o sensore di temperatura non disponibile; batteria scarica) e di un unico allarme \textbf{clinico} di sicurezza locale, la \textbf{tachipnea} (frequenza respiratoria oltre la soglia critica), che essendo il marcatore primario della crisi asmatica viene segnalato direttamente dal dispositivo come rete di sicurezza, in aggiunta alla valutazione svolta dal backend. Per evitare di generare un alert per ogni singolo glitch transitorio, una condizione di guasto viene segnalata solo dopo 5 letture consecutive anomale, e un secondo alert di risoluzione viene generato non appena la condizione rientra.
 
 % =====================================================================
+\newpage
 \section{Ruoli, Autenticazione e Multitenancy}
 
 Il backend implementa un'autenticazione a token \textbf{JWT} con hashing delle password (bcrypt) e un controllo accessi basato sui ruoli (\textbf{RBAC}). L'entità \texttt{Caregiver} possiede un campo \texttt{role} che distingue due profili con permessi diversi; ogni accesso ai dati di un device passa da un controllo di proprietà centralizzato (dipendenza \texttt{authorized\_device}), così che l'isolamento dei dati sia garantito su tutti gli endpoint REST:
 
 \begin{itemize}[leftmargin=1.3em,itemsep=2pt]
   \item \textbf{Paziente / Caregiver.} Accede all'App mobile (React Native), visualizzando \emph{esclusivamente} la telemetria e gli alert dei \emph{propri} device (verifica su \texttt{owner\_id}; un device altrui restituisce \texttt{403}). Riceve notifiche realtime via WebSocket/SSE e notifiche push sugli alert critici.
-  \item \textbf{Medico Pediatra.} Ha visione su \emph{tutti} i pazienti, consulta i grafici storici su \textbf{Grafana}, gestisce la configurazione remota dei device (frequenza di campionamento, associazione paziente-dispositivo) e — con permessi esclusivi (\texttt{require\_medico}) — \textbf{configura le soglie cliniche per-device} e consulta l'\textbf{audit log}. Ha accesso in lettura/scrittura alla \textbf{Scheda Anamnestica} del paziente (patologie, allergie, terapie cortisoniche), persistita nel database relazionale.
+  \item \textbf{Medico Pediatra.} Ha visione su \emph{tutti} i pazienti, consulta i grafici storici su \textbf{Grafana}, gestisce la configurazione remota dei device (frequenza di campionamento, associazione paziente-dispositivo) e --- con permessi esclusivi (\texttt{require\_medico}) --- \textbf{configura le soglie cliniche per-device} e consulta l'\textbf{audit log}. Ha accesso in lettura/scrittura alla \textbf{Scheda Anamnestica} del paziente (patologie, allergie, terapie cortisoniche), persistita nel database relazionale.
 \end{itemize}
 
 Tutte le operazioni rilevanti (login, accesso allo storico/agli alert, modifica delle soglie, consultazione/aggiornamento della scheda paziente, invio comandi) sono registrate in un \textbf{audit log} append-only che traccia chi, cosa, su quale risorsa e quando.
 
 % =====================================================================
+\newpage
 \section{Soglie Cliniche per l'Asma Pediatrico}
 
-Il motore decisionale (valutazione in Node-RED per la dashboard e nel backend FastAPI per app e storico) valuta i pacchetti in arrivo e genera alert per la prevenzione e la gestione dell'attacco d'asma, basandosi su protocolli pediatrici. Il firmware non applica soglie cliniche proprie: si limita a fornire i valori misurati e un indicatore di qualità del dato (\texttt{sensor\_contact}, \texttt{device\_status}), lasciando l'intera interpretazione clinica al backend. Le soglie sono \textbf{configurabili per-device dal medico} (entità \texttt{DeviceThreshold}, endpoint \texttt{PUT /devices/\{id\}/thresholds}): in assenza di una configurazione dedicata si applicano i valori di default qui riportati.
+Il motore decisionale (valutazione in Node-RED per la dashboard e nel backend FastAPI per app e storico) valuta i pacchetti in arrivo e genera alert per la prevenzione e la gestione dell'attacco d'asma, basandosi su protocolli pediatrici. Il firmware non applica l'intera classificazione clinica multi-livello: si limita a fornire i valori misurati e un indicatore di qualità del dato (\texttt{sensor\_contact}, \texttt{device\_status}) e a generare il solo allarme di sicurezza per la tachipnea (Sezione~4), lasciando al backend la valutazione completa. Le soglie sono \textbf{configurabili per-device dal medico} (entità \texttt{DeviceThreshold}, endpoint \texttt{PUT /devices/\{id\}/thresholds}): in assenza di una configurazione dedicata si applicano i valori di default qui riportati.
 
 \begin{table}[h]
 \centering
 \small
 \begin{tabularx}{\textwidth}{@{}Yccc@{}}
 \toprule
-\textbf{Parametro Clinico} & \textbf{Normale (Nominale)} & \textbf{Warning (Lieve anomalia)} & \textbf{Critical (Crisi Asmatica)} \\
+\textbf{Parametro Clinico} & \textbf{Nominale} & \textbf{Warning} & \textbf{Critical} \\
 \midrule
-\textbf{Frequenza Respiratoria} & 20 -- 30 atti/min & 31 -- 40 atti/min & $> 40$ atti/min (Tachipnea) \\
-\textbf{BPM (Cardiaca)} & 90 -- 110 BPM & 111 -- 130 BPM & $> 130$ BPM \\
+\textbf{Frequenza Respiratoria} & 14 -- 30 atti/min & $<14$ oppure $>30$ & $\leq 10$ (bradipnea) oppure $\geq 40$ (tachipnea) \\
+\textbf{Frequenza Cardiaca (BPM)} & 70 -- 130 BPM & $<70$ oppure $>130$ & $\leq 60$ (bradicardia) oppure $\geq 150$ (tachicardia) \\
 \bottomrule
 \end{tabularx}
-\caption*{\footnotesize Valori di riferimento tarati per la fascia di età pediatrica. La concomitanza di tachipnea e tachicardia segnala un'esacerbazione asmatica severa.}
+\caption*{\footnotesize Soglie di default (per fascia di età scolare) effettivamente applicate dal backend (\texttt{backend/app/config.py}) e dalla pipeline Node-RED. La frequenza respiratoria è il parametro primario per l'asma; il BPM è valutato come parametro a supporto. La concomitanza di tachipnea e tachicardia segnala un'esacerbazione asmatica severa.}
 \end{table}
+
+La \textbf{temperatura cutanea} (misurata alla caviglia, con valori nominali intorno a 31--34~$^\circ$C, fisiologicamente inferiori alla temperatura corporea centrale) è monitorata come parametro periferico a carattere informativo, anch'esso valutato dal backend contro bande di warning/critical configurabili.
 
 Inoltre, il sistema implementa un algoritmo \textbf{anti-panico}: se il \texttt{device\_status} differisce da \texttt{SYSTEM\_OK} (es. cavigliera sganciata), la pipeline \emph{inibisce} la generazione di allarmi medici, producendo esclusivamente un alert \textbf{Tecnico}.
 
 % =====================================================================
+\newpage
 \section{Stato di Implementazione}\label{sec:stato}
 
 La tabella seguente distingue ciò che è \IMPL{} nel repository sorgente da ciò che è \PLAN{} a livello di architettura espansa.
@@ -196,11 +211,11 @@ La tabella seguente distingue ciò che è \IMPL{} nel repository sorgente da ci�
 \midrule
 Acquisizione ECG con Ring Buffer Statici (Pan-Tompkins) e stima della Frequenza Respiratoria via EDR (Filtro IIR su intervalli RR) & \texttt{firmware/sensor\_ecg.py}, \texttt{firmware/resp\_edr.py} & \IMPL \\
 Acquisizione temperatura cutanea (termistore NTC analogico) & \texttt{firmware/sensor\_temp.py} & \IMPL \\
-Monitoraggio livello di batteria (partitore resistivo su ADC) & \texttt{firmware/sensor\_battery.py} & \IMPL \\
+Monitoraggio livello di batteria (partitore resistivo su ADC1) & \texttt{firmware/sensor\_battery.py} & \IMPL \\
 Macchina a stati MQTT asincrona + ricezione Comandi & \texttt{firmware/main\_real\_mqtt.py} & \IMPL \\
 Trasporto alternativo BLE (modalità demo/test locale) & \texttt{firmware/transport\_ble.py} & \IMPL \\
 Configurazione da remoto: frequenza di pubblicazione e associazione paziente-dispositivo (MQTT e BLE) & \texttt{firmware/main\_real\_mqtt.py}, \texttt{main\_real\_ble.py} & \IMPL \\
-Alert hardware dedicati (guasto sensore persistente, batteria scarica) su topic separato & \texttt{firmware/alerts.py} & \IMPL \\
+Alert dedicati su topic separato (guasto sensore persistente, batteria scarica, tachipnea) & \texttt{firmware/alerts.py} & \IMPL \\
 Simulatore di telemetria fisiologica (incl. batteria simulata) & \texttt{firmware/sensor\_sim.py} & \IMPL \\
 Stack Server (Mosquitto, InfluxDB, Grafana, Node-RED) & \texttt{docker-stack/} & \IMPL \\
 Autenticazione JWT multi-ruolo (RBAC: Medico/Paziente) con isolamento dati per account & \texttt{backend/app/auth.py}, \texttt{main.py} & \IMPL \\
@@ -216,6 +231,7 @@ Watchdog assenza dati $>$10~s (Node-RED) & --- & \PLAN \\
 \end{table}
 
 % =====================================================================
+\newpage
 \section{Riferimenti Medici e Fonti Istituzionali}
 
 \begin{enumerate}[leftmargin=2em,itemsep=4pt,label={[\arabic*]}]
