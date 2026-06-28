@@ -1,9 +1,8 @@
 # Note di setup — Dashboard Grafana e Notifiche Push
 
-Questo file documenta solo le **nuove** funzionalità aggiunte rispetto
-alla versione precedente dell'app: dashboard Grafana in-app e push
-notifications reali. Non sostituisce `README.md` (quello generato da
-Expo Snack), lo affianca.
+Questo file documenta la configurazione e le funzionalità aggiuntive
+dell'app: dashboard Grafana in-app e push notifications reali. Non
+sostituisce `README.md` (generato da Expo Snack), lo affianca.
 
 ## 1. Dipendenza da installare
 
@@ -95,66 +94,45 @@ sia loggato, perché il login non restituisce ancora un campo `role`
 (Punto 4 dei requisiti). Quando il backend distinguerà paziente/medico,
 va condizionato allo stesso modo.
 
-## 5. Allineamento con gli alert del firmware reale (`alerts.py`)
+## 5. Gestione degli alert del firmware (`alerts.py`)
 
 Il firmware invia alert con `gravita` su tre livelli — `WARNING`,
 `CRITICAL`, `INFO` — dove `INFO` indica che una condizione
-precedentemente segnalata è **rientrata** (testo con suffisso
+precedentemente segnalata è rientrata (testo con suffisso
 "(RISOLTO)"). La normalizzazione in `MonitorScreen.js`
 (`normalizeAlert`) e la notifica locale in `Notifications.js`
-(`sendAlertNotification`) ora preservano questo terzo livello invece di
-schiacciarlo su "attenzione": un alert risolto viene mostrato con
-etichetta "RISOLTO" e bordo verde, e non genera più una notifica
-push/locale con titolo "Attenzione"/"EMERGENZA".
+(`sendAlertNotification`) preservano questo terzo livello: un alert
+risolto è mostrato con etichetta "RISOLTO" e bordo verde, e non
+produce una notifica push/locale con titolo "Attenzione"/"EMERGENZA".
 
-## 6. Rimozione SpO2 e correzione degli alert clinici client-side
+## 6. Alert clinici client-side
 
-L'app conteneva ancora una card "Saturazione SpO2" (con soglia, colore e
-banner dedicati) ereditata da una versione precedente del progetto. Il
-firmware attuale (`sensor_ecg.py`, `resp_edr.py`, `sensor_temp.py`,
-`sensor_battery.py`) **non ha alcun sensore SpO2/PPG**: l'unico sensore
-biomedicale è l'ECG (AD8232), da cui si derivano il BPM e, tramite EDR
-(ECG-Derived Respiration), la frequenza respiratoria. È stata quindi
-rimossa la card SpO2 e ogni riferimento al campo `spo2` (mock di demo,
-storico, soglie).
+L'app mostra un solo alert clinico "su soglia", coerente con quello
+generato dal firmware (`alerts.py`): la **tachipnea**
+(`check_resp_rate`, soglia `config.DEFAULT_ALARM_RESP_MAX = 40`,
+gravità `CRITICAL`), in linea con l'uso clinico del dispositivo
+(asma pediatrico). Il banner di emergenza scatta al superamento di
+questa soglia.
 
-Sono state corrette anche due discrepanze tra gli alert "inventati"
-lato app e quelli realmente generati dal firmware (`alerts.py`):
-
-- Il banner "EMERGENZA" era basato su una soglia minima di frequenza
-  respiratoria (`< 20`, pensata per l'apnea) che il firmware non
-  verifica mai. L'unico alert clinico per soglia che il device genera è
-  la **tachipnea** (`check_resp_rate`, soglia
-  `config.DEFAULT_ALARM_RESP_MAX = 40`, gravità `CRITICAL`) — coerente
-  con l'uso clinico del dispositivo (asma pediatrico). Il banner
-  emergenza ora scatta sopra questa soglia, non sotto un'altra.
-- Il banner "Allerta febbre" (`temperatura > 38.5°C`) non corrispondeva
-  a nessun alert del firmware: `sensor_temp.py` legge il valore ma
-  `alerts.py` non lo confronta con nessuna soglia (l'unico alert di
-  temperatura è "guasto sensore", non "febbre"). È stato sostituito da
-  un banner di **batteria scarica**, che invece è un vero alert WARNING
-  lato device (`check_battery`, soglia
-  `config.DEFAULT_ALARM_BATTERY_MIN_PCT = 15`) finora mostrato solo come
-  numero passivo in fondo alla schermata.
+L'app evidenzia inoltre la **batteria scarica** con un banner
+dedicato, che corrisponde a un vero alert `WARNING` lato device
+(`check_battery`, soglia `config.DEFAULT_ALARM_BATTERY_MIN_PCT = 15`).
 
 Le card di Frequenza Cardiaca, Frequenza Respiratoria e Temperatura
-mantengono comunque l'intervallo "nominale" colorato (rosso/verde): è
+mantengono l'intervallo "nominale" colorato (rosso/verde): è
 un'indicazione visiva orientativa per il genitore, non un alert clinico
 autonomo — l'unico alert autonomo via soglia resta la tachipnea.
 
-## 7. Correzione soglie di temperatura cutanea (bug: falso allarme costante)
+## 7. Soglie di temperatura cutanea
 
-L'intervallo "nominale" della card Temperatura era impostato a 36.0–37.2°C
-(temperatura corporea centrale), mentre il sensore reale (`sensor_temp.py`,
-termistore NTC) e il simulatore (`config.TEMP_SKIN_SIM_MIN/MAX`, vedi
-firmware) misurano la temperatura **cutanea sulla caviglia**, fisiologicamente
-più bassa: il simulatore genera valori nominali nell'intervallo 31.0–34.0°C.
-Con le vecchie soglie, *ogni* lettura nominale risultava "fuori range" e,
-lato backend (`alerts.py`), generava un falso alert critico di "ipotermia"
-a ogni singolo ciclo di telemetria — il sistema era di fatto inutilizzabile
-in demo. La dashboard Grafana aveva già le soglie corrette (31–34.5–35.5°C);
-sono stati allineati a quelle anche `mobile/src/MonitorScreen.js`
-(`TEMP_MIN`/`TEMP_MAX`), `backend/app/config.py` e il flow Node-RED. La card
-è stata anche rinominata da "Temperatura Corporea" a "Temperatura Cutanea"
-per non generare l'aspettativa di una misura di febbre.
+Il sensore reale (`sensor_temp.py`, termistore NTC) e il simulatore
+(`config.TEMP_SKIN_SIM_MIN/MAX`) misurano la temperatura **cutanea
+sulla caviglia**, fisiologicamente più bassa di quella corporea
+centrale: i valori nominali ricadono nell'intervallo 31.0–34.0°C. Le
+soglie "nominali" della card Temperatura sono impostate su questo
+intervallo (31–34.5–35.5°C), coerenti tra
+`mobile/src/MonitorScreen.js` (`TEMP_MIN`/`TEMP_MAX`),
+`backend/app/config.py`, il flow Node-RED e la dashboard Grafana. La
+card è denominata "Temperatura Cutanea" per non indurre l'aspettativa
+di una misura di febbre.
 
