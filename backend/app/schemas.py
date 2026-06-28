@@ -26,6 +26,13 @@ class CaregiverCreate(BaseModel):
     password: str
     role: Literal["caregiver", "medico"] = "caregiver"
 
+    # Dati anagrafici minimi del paziente, inviati dall'app in fase di
+    # registrazione (LoginScreen → registerUser). Usati per creare la scheda
+    # paziente e per l'auto-assegnazione del paziente al dispositivo.
+    patient_name: Optional[str] = None
+    age_years: Optional[int] = None
+    age_months: Optional[int] = None
+
 
 class CaregiverResponse(BaseModel):
     """Risposta di POST /register e GET /me (la password hashata non si espone)."""
@@ -34,6 +41,11 @@ class CaregiverResponse(BaseModel):
     id: int
     username: str
     role: str
+
+    # Valorizzati da POST /register: l'id paziente generato e assegnato in
+    # automatico e il dispositivo associato. None per GET /me.
+    patient_id: Optional[str] = None
+    device_id: Optional[str] = None
 
 
 class Token(BaseModel):

@@ -70,6 +70,12 @@ class Device(Base):
     # Nome del bambino associato alla cavigliera (opzionale)
     baby_name = Column(String, nullable=True)
 
+    # patient_id attualmente assegnato alla cavigliera. Viene impostato in
+    # automatico alla registrazione del caregiver (vedi POST /register) e
+    # inviato al firmware via comando MQTT, così la telemetria risulta
+    # subito "intestata" al paziente senza un passaggio manuale del medico.
+    patient_id = Column(String, nullable=True)
+
     # Chiave esterna verso caregivers.id: collega il device al suo proprietario.
     # Può essere None se il device ha inviato dati prima che il caregiver lo registrasse.
     owner_id = Column(Integer, ForeignKey("caregivers.id"))

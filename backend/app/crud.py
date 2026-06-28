@@ -88,6 +88,29 @@ async def ensure_device(db: AsyncSession, device_id: str):
     return dev
 
 
+async def claim_device_for_patient(db: AsyncSession, device_id: str, owner_id: int,
+                                   patient_id: str, baby_name: str | None = None):
+    """Associa il dispositivo al caregiver e gli assegna un patient_id.
+
+    Usata dall'auto-assegnazione alla registrazione (POST /register): crea il
+    device se non esiste ancora (la telemetria potrebbe non essere mai
+    arrivata), imposta owner_id e patient_id, e aggiorna il nome del bambino
+    se fornito. In questo prototipo a singola cavigliera l'ultimo caregiver
+    registrato diventa proprietario del dispositivo predefinito.
+    """
+    dev = await get_device(db, device_id)
+    if dev is None:
+        dev = models.Device(device_id=device_id)
+        db.add(dev)
+    dev.owner_id = owner_id
+    dev.patient_id = patient_id
+    if baby_name:
+        dev.baby_name = baby_name
+    await db.commit()
+    await db.refresh(dev)
+    return dev
+
+
 # ===================== READING =====================
 
 async def save_reading(db: AsyncSession, r: dict):

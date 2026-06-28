@@ -14,6 +14,8 @@
 #   - Realtime: WebSocket (/ws/live) e SSE (/sse/live) verso l'app
 import asyncio
 import json
+import re
+import uuid
 from contextlib import asynccontextmanager
 
 import aiomqtt
@@ -130,21 +132,78 @@ def root():
 
 # ===================== AUTH =====================
 
+def _make_patient_id(username: str) -> str:
+    """Genera un patient_id stabile e leggibile a partire dallo username
+    (univoco). Se lo username non contiene caratteri alfanumerici utili,
+    ripiega su un identificativo casuale."""
+    base = re.sub(r"[^a-z0-9]", "", (username or "").lower())[:20]
+    return f"pat_{base}" if base else f"pat_{uuid.uuid4().hex[:8]}"
+
+
+async def _publish_device_command(device_id: str, payload: dict) -> bool:
+    """Pubblica un comando JSON sul topic comandi del device via MQTT
+    (connessione one-shot). Ritorna True se l'invio è riuscito, False se il
+    broker non è raggiungibile (il chiamante decide se è un errore bloccante
+    o un'operazione best-effort)."""
+    topic = config.TOPIC_CMD_TEMPLATE.format(device_id=device_id)
+    try:
+        async with aiomqtt.Client(config.MQTT_HOST, config.MQTT_PORT) as client:
+            await client.publish(topic, json.dumps(payload))
+        return True
+    except Exception:
+        return False
+
+
 @app.post("/register", response_model=schemas.CaregiverResponse)
 async def register(data: schemas.CaregiverCreate, request: Request,
                    db: AsyncSession = Depends(get_db)):
-    """Registra un nuovo account (caregiver o, a scopo didattico, medico).
+    """Registra un nuovo account e gli auto-assegna il paziente sul dispositivo.
 
-    Restituisce 400 se lo username è già in uso. Eventuali dati anagrafici del
-    paziente inviati dall'app insieme alla registrazione vengono ignorati qui:
-    la scheda paziente si gestisce per-device (vedi /devices/{id}/patient).
+    Oltre a creare il caregiver, la registrazione:
+      1. genera un patient_id stabile per l'account;
+      2. associa il dispositivo predefinito al caregiver e gli assegna il
+         patient_id (claim_device_for_patient);
+      3. crea la scheda paziente con i dati anagrafici inviati dall'app;
+      4. avvisa il firmware via comando MQTT {"patient_id": ...}, così la
+         telemetria viene subito intestata al paziente e il device esce dallo
+         stato WARN_PATIENT_NOT_ASSIGNED — senza alcun passaggio manuale.
+
+    L'invio MQTT è best-effort: se il broker non è raggiungibile la
+    registrazione riesce comunque (l'associazione resta salvata nel DB e
+    verrà reinviata al device al prossimo comando di configurazione).
     """
     if await crud.get_caregiver_by_username(db, data.username):
         raise HTTPException(400, "Username già registrato")
     user = await crud.create_caregiver(db, data)
-    await crud.write_audit(db, action="register", username=user.username,
-                           role=user.role, ip=_client_ip(request))
-    return user
+
+    patient_id = _make_patient_id(user.username)
+    device_id = config.DEFAULT_DEVICE_ID
+
+    # 2) associa device + patient_id al nuovo caregiver
+    await crud.claim_device_for_patient(
+        db, device_id=device_id, owner_id=user.id,
+        patient_id=patient_id, baby_name=data.patient_name,
+    )
+
+    # 3) scheda paziente (Punto 9) con i dati anagrafici della registrazione
+    if data.patient_name:
+        await crud.upsert_patient_record(
+            db, device_id, {"full_name": data.patient_name}, user.username
+        )
+
+    # 4) notifica il firmware via MQTT (best-effort)
+    mqtt_sent = await _publish_device_command(device_id, {"patient_id": patient_id})
+
+    await crud.write_audit(
+        db, action="register", username=user.username, role=user.role,
+        resource=device_id,
+        detail=json.dumps({"patient_id": patient_id, "mqtt_sent": mqtt_sent}),
+        ip=_client_ip(request),
+    )
+    return schemas.CaregiverResponse(
+        id=user.id, username=user.username, role=user.role,
+        patient_id=patient_id, device_id=device_id,
+    )
 
 
 @app.post("/login", response_model=schemas.Token)
@@ -365,20 +424,15 @@ async def send_device_command(device_id: str,
     """
     await authorized_device(device_id, db, user)
 
-    # Costruisce il topic di destinazione per questo specifico device
-    topic = config.TOPIC_CMD_TEMPLATE.format(device_id=device_id)
-
     # Filtra i campi None: invia solo i parametri esplicitamente impostati
     payload = {k: v for k, v in cmd.model_dump().items() if v is not None}
     if not payload:
         raise HTTPException(400, "Nessun parametro di comando specificato")
 
-    # Pubblica il comando sul broker MQTT (connessione one-shot)
-    try:
-        async with aiomqtt.Client(config.MQTT_HOST, config.MQTT_PORT) as client:
-            await client.publish(topic, json.dumps(payload))
-    except Exception as e:
-        raise HTTPException(503, f"Broker MQTT non raggiungibile: {e}")
+    # Pubblica il comando sul broker MQTT (riusa l'helper condiviso con
+    # l'auto-assegnazione del paziente in fase di registrazione).
+    if not await _publish_device_command(device_id, payload):
+        raise HTTPException(503, "Broker MQTT non raggiungibile")
 
     await crud.write_audit(db, action="send_command", username=user.username,
                            role=user.role, resource=device_id,

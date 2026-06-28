@@ -43,6 +43,12 @@ TOPIC_ALERT = os.getenv("TOPIC_ALERT", "alvea/devices/+/alerts")
 # Sostituire <device_id> con l'id reale prima di pubblicare.
 TOPIC_CMD_TEMPLATE = "alvea/devices/{device_id}/commands"
 
+# Dispositivo predefinito a cui viene auto-assegnato il paziente al momento
+# della registrazione (deve coincidere con DEVICE_ID nel firmware ESP32,
+# config.py lato firmware: "ALVEA_04"). In un deployment con piu' cavigliere
+# l'associazione avverrebbe rivendicando il device_id stampato sulla fascia.
+DEFAULT_DEVICE_ID = os.getenv("DEFAULT_DEVICE_ID", "ALVEA_04")
+
 # --- InfluxDB (serie temporali, opzionale) --------------------------------
 INFLUX_URL     = os.getenv("INFLUX_URL",    "http://influxdb:8086")
 INFLUX_TOKEN   = os.getenv("INFLUX_TOKEN",  "")
