@@ -9,7 +9,6 @@
 #   - Frequenza respiratoria  → soglie resp_* (da EDR)
 #   - Frequenza cardiaca BPM  → soglie bpm_*
 #   - Temperatura cutanea     → soglie temp_*
-# Non c'è SpO2: il dispositivo non ha un sensore di saturazione.
 #
 # Le soglie arrivano come dizionario (chiavi di config.DEFAULT_THRESHOLDS): di
 # default sono quelle globali, ma il medico può configurarne di dedicate per

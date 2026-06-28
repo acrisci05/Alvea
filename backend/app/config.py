@@ -54,8 +54,7 @@ INFLUX_ENABLED = os.getenv("INFLUX_ENABLED", "false").lower() == "true"
 # --- Soglie cliniche (dalla relazione tecnica, Sezione 5) -----------------
 # Il dispositivo ha un unico sensore biomedicale (ECG AD8232): da esso si
 # ricavano il battito (BPM) e, tramite EDR, la frequenza respiratoria. La
-# temperatura cutanea arriva dal termistore NTC. NON esiste un sensore SpO2,
-# quindi nel backend non c'è alcuna soglia/valutazione sulla saturazione.
+# temperatura cutanea arriva dal termistore NTC.
 #
 # Frequenza respiratoria (atti/min) — parametro chiave per l'asma
 RESP_WARN_LOW  = 14     # warning se FR < 14

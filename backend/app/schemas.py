@@ -92,7 +92,6 @@ class ReadingIn(BaseModel):
     main_real_mqtt.py / sensor_sim.py:
       device_id, patient_id, timestamp, bpm, skin_temperature,
       respiration_rate, battery_pct, sensor_contact, device_status, source.
-    Il dispositivo non ha sensore SpO2, quindi non esiste un campo di saturazione.
     """
     device_id: str
     patient_id: Optional[str] = None
