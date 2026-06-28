@@ -1,7 +1,7 @@
 {
   "id": null,
   "uid": "alvea-asthma-dashboard",
-  "title": "Alvea \u2014 Monitoraggio Asma Pediatrico",
+  "title": "Alvea — Monitoraggio Asma Pediatrico",
   "tags": [
     "alvea",
     "asma",
@@ -76,7 +76,7 @@
             "type": "influxdb",
             "uid": "alvea_influx"
           },
-          "query": "from(bucket: \"vitals\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"vitals\" and r._field == \"respiration_rate\")\n  |> filter(fn: (r) => r._value > 0)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"vitals\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => not exists r[\"device_id\"] or r[\"device_id\"] =~ /${device:regex}/)\n  |> filter(fn: (r) => not exists r[\"patient_id\"] or r[\"patient_id\"] =~ /${patient:regex}/)\n  |> filter(fn: (r) => r._measurement == \"vitals\" and r._field == \"respiration_rate\")\n  |> filter(fn: (r) => r._value > 0)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ]
@@ -140,7 +140,7 @@
             "type": "influxdb",
             "uid": "alvea_influx"
           },
-          "query": "from(bucket: \"vitals\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"vitals\" and r._field == \"bpm\")\n  |> filter(fn: (r) => r._value > 0)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"vitals\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => not exists r[\"device_id\"] or r[\"device_id\"] =~ /${device:regex}/)\n  |> filter(fn: (r) => not exists r[\"patient_id\"] or r[\"patient_id\"] =~ /${patient:regex}/)\n  |> filter(fn: (r) => r._measurement == \"vitals\" and r._field == \"bpm\")\n  |> filter(fn: (r) => r._value > 0)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ]
@@ -148,7 +148,7 @@
     {
       "id": 4,
       "type": "stat",
-      "title": "Temp Cutanea (C\u00b0)",
+      "title": "Temp Cutanea (C°)",
       "datasource": {
         "type": "influxdb",
         "uid": "alvea_influx"
@@ -204,7 +204,7 @@
             "type": "influxdb",
             "uid": "alvea_influx"
           },
-          "query": "from(bucket: \"vitals\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"vitals\" and r._field == \"skin_temperature\")\n  |> filter(fn: (r) => r._value > 0)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"vitals\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => not exists r[\"device_id\"] or r[\"device_id\"] =~ /${device:regex}/)\n  |> filter(fn: (r) => not exists r[\"patient_id\"] or r[\"patient_id\"] =~ /${patient:regex}/)\n  |> filter(fn: (r) => r._measurement == \"vitals\" and r._field == \"skin_temperature\")\n  |> filter(fn: (r) => r._value > 0)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ]
@@ -275,7 +275,7 @@
             "type": "influxdb",
             "uid": "alvea_influx"
           },
-          "query": "from(bucket: \"vitals\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"vitals\" and r._field == \"sensor_contact\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"vitals\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => not exists r[\"device_id\"] or r[\"device_id\"] =~ /${device:regex}/)\n  |> filter(fn: (r) => not exists r[\"patient_id\"] or r[\"patient_id\"] =~ /${patient:regex}/)\n  |> filter(fn: (r) => r._measurement == \"vitals\" and r._field == \"sensor_contact\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ]
@@ -331,7 +331,7 @@
             "type": "influxdb",
             "uid": "alvea_influx"
           },
-          "query": "from(bucket: \"vitals\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"vitals\" and r._field == \"alert_count\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"vitals\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => not exists r[\"device_id\"] or r[\"device_id\"] =~ /${device:regex}/)\n  |> filter(fn: (r) => not exists r[\"patient_id\"] or r[\"patient_id\"] =~ /${patient:regex}/)\n  |> filter(fn: (r) => r._measurement == \"vitals\" and r._field == \"alert_count\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ]
@@ -399,7 +399,7 @@
             "type": "influxdb",
             "uid": "alvea_influx"
           },
-          "query": "from(bucket: \"vitals\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"vitals\" and r._field == \"respiration_rate\")\n  |> filter(fn: (r) => r._value > 0)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"vitals\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => not exists r[\"device_id\"] or r[\"device_id\"] =~ /${device:regex}/)\n  |> filter(fn: (r) => not exists r[\"patient_id\"] or r[\"patient_id\"] =~ /${patient:regex}/)\n  |> filter(fn: (r) => r._measurement == \"vitals\" and r._field == \"respiration_rate\")\n  |> filter(fn: (r) => r._value > 0)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ]
@@ -467,7 +467,7 @@
             "type": "influxdb",
             "uid": "alvea_influx"
           },
-          "query": "from(bucket: \"vitals\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"vitals\" and r._field == \"bpm\")\n  |> filter(fn: (r) => r._value > 0)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"vitals\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => not exists r[\"device_id\"] or r[\"device_id\"] =~ /${device:regex}/)\n  |> filter(fn: (r) => not exists r[\"patient_id\"] or r[\"patient_id\"] =~ /${patient:regex}/)\n  |> filter(fn: (r) => r._measurement == \"vitals\" and r._field == \"bpm\")\n  |> filter(fn: (r) => r._value > 0)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ]
@@ -475,7 +475,7 @@
     {
       "id": 10,
       "type": "timeseries",
-      "title": "Storico Temp Cutanea (C\u00b0)",
+      "title": "Storico Temp Cutanea (C°)",
       "datasource": {
         "type": "influxdb",
         "uid": "alvea_influx"
@@ -535,10 +535,170 @@
             "type": "influxdb",
             "uid": "alvea_influx"
           },
-          "query": "from(bucket: \"vitals\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"vitals\" and r._field == \"skin_temperature\")\n  |> filter(fn: (r) => r._value > 0)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "query": "from(bucket: \"vitals\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => not exists r[\"device_id\"] or r[\"device_id\"] =~ /${device:regex}/)\n  |> filter(fn: (r) => not exists r[\"patient_id\"] or r[\"patient_id\"] =~ /${patient:regex}/)\n  |> filter(fn: (r) => r._measurement == \"vitals\" and r._field == \"skin_temperature\")\n  |> filter(fn: (r) => r._value > 0)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "refId": "A"
         }
       ]
+    },
+    {
+      "id": 11,
+      "type": "stat",
+      "title": "Stato Complessivo Paziente",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "alvea_influx"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 14
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "alvea_influx"
+          },
+          "query": "from(bucket: \"vitals\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => not exists r[\"device_id\"] or r[\"device_id\"] =~ /${device:regex}/)\n  |> filter(fn: (r) => not exists r[\"patient_id\"] or r[\"patient_id\"] =~ /${patient:regex}/)\n  |> filter(fn: (r) => r._measurement == \"vitals\" and r._field == \"alert_count\")\n  |> last()"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value_and_name",
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "STABILE",
+                  "color": "green",
+                  "index": 0
+                }
+              }
+            },
+            {
+              "type": "range",
+              "options": {
+                "from": 1,
+                "to": 1000000,
+                "result": {
+                  "text": "ALLARME ATTIVO",
+                  "color": "red",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "noValue": "Nessun dato"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 12,
+      "type": "text",
+      "title": "Scheda Clinica - Informazioni Essenziali",
+      "gridPos": {
+        "h": 6,
+        "w": 18,
+        "x": 6,
+        "y": 14
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "### Scheda clinica essenziale - Asma pediatrico\n\n**Dispositivo / Paziente:** selezionabili dai filtri in alto (*Dispositivo*, *Paziente*).\n\n**Parametri monitorati e soglie** (default, configurabili dal medico):\n\n| Parametro | Nominale | Warning | Critico |\n|---|---|---|---|\n| Freq. Respiratoria | 14-30 atti/min | <14 / >30 | <=10 / >=40 (tachipnea) |\n| Freq. Cardiaca | 70-130 BPM | <70 / >130 | <=60 / >=150 |\n| Temp. cutanea (caviglia) | 31-34 C | <30.5 / >35 | <=29 / >=36 |\n\n**Alert autonomo del dispositivo:** tachipnea (FR oltre soglia critica) e batteria scarica (<15%).\n\n**Anamnesi completa** (patologie, allergie, terapie): gestita dal medico nell'app/back-end (scheda paziente)."
+      }
     }
-  ]
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "device",
+        "label": "Dispositivo",
+        "type": "query",
+        "datasource": {
+          "type": "influxdb",
+          "uid": "alvea_influx"
+        },
+        "definition": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"vitals\", tag: \"device_id\")",
+        "query": {
+          "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"vitals\", tag: \"device_id\")"
+        },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "allValue": null,
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": [],
+        "sort": 1,
+        "hide": 0
+      },
+      {
+        "name": "patient",
+        "label": "Paziente",
+        "type": "query",
+        "datasource": {
+          "type": "influxdb",
+          "uid": "alvea_influx"
+        },
+        "definition": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"vitals\", tag: \"patient_id\")",
+        "query": {
+          "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"vitals\", tag: \"patient_id\")"
+        },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "allValue": null,
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": [],
+        "sort": 1,
+        "hide": 0
+      }
+    ]
+  }
 }
