@@ -1,0 +1,11 @@
+# Copia in .env e personalizza. Valori condivisi da tutto lo stack.
+
+# InfluxDB (setup automatico al primo avvio)
+INFLUX_USERNAME=admin
+INFLUX_PASSWORD=alvea123
+INFLUX_ORG=alvea
+INFLUX_BUCKET=vitals
+INFLUX_ADMIN_TOKEN=alvea-admin-token
+
+# Backend
+SECRET_KEY=cambia_questa_chiave_in_produzione
