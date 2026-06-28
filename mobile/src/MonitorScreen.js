@@ -24,13 +24,12 @@ import GrafanaScreen from "./GrafanaScreen";
 
 // --- Soglie cliniche per neonati/lattanti ---
 // Allineate al firmware (config.py + alerts.py): l'unico alert clinico
-// "su soglia" generato dal device è la tachipnea, perché il dispositivo
-// non misura SpO2 (nessun sensore PPG/ossimetro: l'unico sensore
+// "su soglia" generato dal device è la tachipnea. L'unico sensore
 // biomedicale è l'ECG, da cui derivano bpm e, via EDR, la frequenza
-// respiratoria — vedi sensor_ecg.py e resp_edr.py) e non genera alcun
-// alert basato su una soglia di temperatura alta (sensor_temp.py legge il
-// valore ma alerts.py non lo confronta con nessuna soglia: l'unico alert
-// di temperatura è "guasto sensore", non "febbre").
+// respiratoria (vedi sensor_ecg.py e resp_edr.py). Il device non genera
+// alcun alert basato su una soglia di temperatura alta (sensor_temp.py
+// legge il valore ma alerts.py non lo confronta con nessuna soglia:
+// l'unico alert di temperatura è "guasto sensore", non "febbre").
 //
 // Intervalli "nominali" mostrati nelle card sono quindi puramente
 // informativi/orientativi (servono al genitore per leggere il numero),
@@ -314,8 +313,6 @@ export default function MonitorScreen({ token, deviceId, onLogout }) {
   // respiration_rate, skin_temperature, battery_pct: manteniamo i vecchi
   // nomi come fallback (??) per non rompere eventuali backend di transizione,
   // ma i campi del contratto reale del dispositivo vengono letti per primi.
-  // Nessun campo "spo2": il device non ha un sensore SpO2 (vedi nota sulle
-  // soglie cliniche, sopra).
   const contact = reading?.sensor_contact;
   const resp = reading?.respiration_rate ?? reading?.respiration ?? reading?.rr ?? "--";
   const temp = reading?.skin_temperature ?? reading?.temperature ?? "--";

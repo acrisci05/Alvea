@@ -16,9 +16,8 @@ const MOCK_LOGIN_RESPONSE = {
 // Campi e nomi allineati al payload reale del device (vedi "reading" in
 // main_real_mqtt.py/main_real_ble.py: device_id, patient_id, timestamp,
 // bpm, skin_temperature, respiration_rate, battery_pct, sensor_contact,
-// device_status, source). Il firmware NON ha alcun sensore SpO2 (l'unico
-// sensore biomedicale è l'ECG, da cui derivano bpm e, via EDR, la
-// frequenza respiratoria): niente campo "spo2" nei dati, demo incluse.
+// device_status, source). L'unico sensore biomedicale è l'ECG, da cui
+// derivano bpm e, via EDR, la frequenza respiratoria.
 const MOCK_LATEST = {
   device_id: MOCK_DEVICE_ID,
   patient_id: "demo-patient",
