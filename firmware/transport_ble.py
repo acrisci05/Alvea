@@ -11,7 +11,7 @@ _IRQ_CENTRAL_DISCONNECT = const(2)
 _IRQ_GATTS_WRITE = const(3)
 _IRQ_MTU_EXCHANGED = const(21)
 
-DESIRED_MTU = 185  # payload utile ~182 byte, sufficiente per il JSON attuale
+DESIRED_MTU = 256  # payload utile ~182 byte, sufficiente per il JSON attuale
 DEFAULT_ATT_MTU = 23
 
 

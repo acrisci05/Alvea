@@ -1,7 +1,12 @@
 # main_real_ble.py - Firmware ALTERNATIVO via BLE (demo/test locale).
 #
-# Il campo "timestamp" NON e' sincronizzato via NTP perche' in modalita' BLE-only
-# non c'e' garanzia di accesso a Internet
+# Il campo "timestamp" qui sotto NON e' sincronizzato via NTP (a differenza
+# della pipeline MQTT) perche' in modalita' BLE-only non c'e' garanzia di
+# accesso a Internet
+#
+# Architettura sensoristica: ECG (AD8232) come unica fonte di BPM e
+# Frequenza Respiratoria derivata dagli intervalli RR
+# dell'ECG (EDR - ECG-Derived Respiration), tramite il modulo resp_edr.py.
 
 import time
 import json
@@ -13,9 +18,10 @@ from sensor_temp import TempSensor
 from sensor_battery import BatteryMonitor
 from alerts import AlertManager
 import resp_edr
+import ntp_time
 import shell_log
 
-print("ALVEA: AVVIO ARCHITETTURA BLE (modalita' alternativa/demo)")
+print("=== ALVEA: AVVIO ARCHITETTURA BLE (modalita' alternativa/demo) ===")
 
 # --- VARIABILE DI CONFIGURAZIONE DINAMICA ---
 # Aggiornabile a runtime dal medico tramite scrittura BLE sulla characteristic di comando
@@ -43,6 +49,18 @@ def ble_command_callback(payload):
             nuovo_patient_id = data["patient_id"]
             current_patient_id = nuovo_patient_id if nuovo_patient_id else None
             print(f"-> [OK] Device associato al paziente: {current_patient_id}")
+        if "resp_rate_max" in data:
+            try:
+                alert_mgr.update_thresholds(resp_max=float(data["resp_rate_max"]))
+                print("-> [OK] Soglia frequenza respiratoria aggiornata.")
+            except (ValueError, TypeError):
+                print("-> [ERRORE] Valore resp_rate_max non valido.")
+        if "battery_min_pct" in data:
+            try:
+                alert_mgr.update_thresholds(battery_min=float(data["battery_min_pct"]))
+                print("-> [OK] Soglia batteria minima aggiornata.")
+            except (ValueError, TypeError):
+                print("-> [ERRORE] Valore battery_min_pct non valido.")
 
     except Exception as e:
         print("-> [ERRORE] Parsing del comando BLE fallito:", e)
@@ -85,7 +103,9 @@ while True:
 
         # Diagnostica Hardware
         if not contact_ecg:
-            # Senza contatto ECG non sono disponibili BPM e EDR (respiro): condizione bloccante primaria nell'architettura.
+            # Senza contatto ECG non sono disponibili BPM e EDR (respiro):
+            # e' la condizione bloccante primaria in questa architettura,
+            # essendo l'ECG l'unico sensore biomedicale del dispositivo.
             status_string = "ERR_ECG_LEADS_OFF"
         elif temp_val is None:
             status_string = "ERR_TEMP_SENSOR_FAULT"
@@ -130,7 +150,7 @@ while True:
         reading = {
             "device_id": config.DEVICE_ID,
             "patient_id": current_patient_id,
-            "timestamp": time.time(),
+            "timestamp": ntp_time.unix_time(),
             "bpm": float(bpm),
             "skin_temperature": float(final_temp),
             "respiration_rate": float(resp_rate),

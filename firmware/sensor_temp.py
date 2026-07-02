@@ -25,9 +25,9 @@ class TempSensor:
                 if self._roms:
                     self._hardware_ok = True
             elif self.mode == "ntc":
-                # API moderna: attenuazione nel costruttore
-                self._adc = machine.ADC(machine.Pin(PIN_NTC),
-                                        atten=machine.ADC.ATTN_11DB)
+                self._adc = machine.ADC(machine.Pin(PIN_NTC))
+                self._adc.atten(machine.ADC.ATTN_11DB)
+                self._adc.width(machine.ADC.WIDTH_12BIT)
                 self._hardware_ok = True
         except Exception as e:
             print("[HARDWARE ERROR] Errore inizializzazione sensore temperatura:", e)
@@ -70,10 +70,10 @@ class TempSensor:
                 return temp
 
             if self.mode == "ntc":
-                raw = self._adc.read_u16() >> 4   # 0-65535 -> 0-4095
+                raw = self._adc.read()
                 if raw == 0 or raw == 4095: # Cortocircuito o circuito aperto
                     return None
-                return round(30.0 + (raw / 4095.0) * 5.0, 1)
+                return round(31.0 + (raw / 4095.0) * 3.0, 1)
 
         except Exception as e:
             print("[TEMP SENSOR ERROR]", e)

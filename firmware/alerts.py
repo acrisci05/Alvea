@@ -1,11 +1,12 @@
 # alerts.py - Generazione e invio di alert locali rilevati dal device.
+#
 # Questo modulo ha il compito di generare alert sia di tipo "device/hardware" (guasti/assenza di contatto dei sensori, batteria scarica) sia l'alert
 # clinico basato su soglia per la frequenza respiratoria (via EDR), con un formato dati compatibile con quanto richiesto
 
 import time
 import json
 import config
-from ntp_time import unix_now
+import ntp_time
 
 
 class AlertManager:
@@ -18,6 +19,15 @@ class AlertManager:
         self.transport_kind = transport_kind
         self._fault_streaks = {}     # nome condizione -> contatore letture consecutive
         self._active_alerts = set()  # condizioni per cui l'alert e' gia' stato inviato
+        self.resp_rate_max = config.DEFAULT_ALARM_RESP_MAX
+        self.battery_min_pct = config.DEFAULT_ALARM_BATTERY_MIN_PCT
+
+    def update_thresholds(self, resp_max=None, battery_min=None):
+        """Aggiorna a runtime le soglie di alert (configurazione del medico)."""
+        if resp_max is not None and resp_max > 0:
+            self.resp_rate_max = resp_max
+        if battery_min is not None and 0 <= battery_min <= 100:
+            self.battery_min_pct = battery_min
 
     def _build_alert(self, parametro, descrizione, gravita, patient_id=None):
         return {
@@ -26,7 +36,7 @@ class AlertManager:
             "parametro": parametro,
             "descrizione": descrizione,
             "gravita": gravita,  
-            "timestamp": unix_now(),
+            "timestamp": ntp_time.unix_time(),
         }
 
     def _send(self, alert_dict):
@@ -81,7 +91,7 @@ class AlertManager:
         """Da chiamare se/quando e' disponibile una lettura di batteria."""
         if battery_pct is None:
             return
-        is_low = battery_pct < config.DEFAULT_ALARM_BATTERY_MIN_PCT
+        is_low = battery_pct < self.battery_min_pct
         self.check_fault(
             "battery_low",
             is_low,
@@ -98,7 +108,7 @@ class AlertManager:
         contatto ECG e' presente"""
         if resp_rate is None or resp_rate <= 0.0:
             return
-        is_high = resp_rate > config.DEFAULT_ALARM_RESP_MAX
+        is_high = resp_rate > self.resp_rate_max
         self.check_fault(
             "resp_rate_high",
             is_high,

@@ -1,8 +1,10 @@
-# sensor_battery.py - Lettura percentuale batteria via partitore resistivo su ADC
+# sensor_battery.py - Lettura percentuale batteria via partitore resistivo
+# su ADC
 
 import machine
 
-PIN_BATTERY = 36
+# Pin ADC dedicato alla lettura della batteria.
+PIN_BATTERY = 25
 BATTERY_MONITORING_ENABLED = True
 
 # Rapporto del partitore resistivo (Vbat = Vletto * RATIO)
@@ -23,9 +25,9 @@ class BatteryMonitor:
         self._hardware_ok = False
         if BATTERY_MONITORING_ENABLED:
             try:
-                # API moderna e portabile: l'attenuazione si imposta nel costruttore
-                self._adc = machine.ADC(machine.Pin(PIN_BATTERY),
-                                        atten=machine.ADC.ATTN_11DB)
+                self._adc = machine.ADC(machine.Pin(PIN_BATTERY))
+                self._adc.atten(machine.ADC.ATTN_11DB)
+                self._adc.width(machine.ADC.WIDTH_12BIT)
                 self._hardware_ok = True
             except Exception as e:
                 print("[HARDWARE ERROR] Errore inizializzazione ADC batteria:", e)
@@ -40,9 +42,7 @@ class BatteryMonitor:
         try:
             total = 0
             for _ in range(N_SAMPLES):
-                # read_u16() (0-65535) e' il metodo portabile; lo riportiamo
-                # a 12 bit (0-4095) con >> 4 per mantenere invariata la matematica di conversione sottostante.
-                total += self._adc.read_u16() >> 4
+                total += self._adc.read()
             raw_avg = total / N_SAMPLES
 
             # raw a 12 bit (0-4095) -> tensione sul pin (0-3.3V) -> Vbat reale

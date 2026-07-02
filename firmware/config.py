@@ -5,15 +5,8 @@
 DEVICE_ID = "ALVEA_04"
 
 # --- RETE / MQTT (Configurazione Sicura) ---
-MQTT_BROKER = "192.168.1.50"
+MQTT_BROKER = "192.168.1.50" 
 MQTT_PORT   = 1883        
-
-try:
-    import secrets as _secrets
-    MQTT_BROKER = getattr(_secrets, "MQTT_BROKER", MQTT_BROKER)
-    MQTT_PORT   = getattr(_secrets, "MQTT_PORT", MQTT_PORT)
-except ImportError:
-    pass
 
 # Le credenziali MQTT riportate sono solo dei fallback di sviluppo
 # per non rompere l'esecuzione se secrets.py non definisce queste variabili.
@@ -30,7 +23,7 @@ BLE_CHAR_UUID     = "abcdef01-1234-5678-1234-56789abcdef0"  # Telemetria (NOTIFY
 BLE_CHAR_CMD_UUID = "abcdef02-1234-5678-1234-56789abcdef0"  # Comandi/config (WRITE, app -> device, Punto 8)
 
 # --- PARAMETRI DINAMICI (Modificabili dal Medico) ---
-#  Dichiarati come valori di DEFAULT (Fallback).
+# Li dichiariamo qui come valori di DEFAULT (Fallback).
 
 DEFAULT_PUBLISH_PERIOD_S = 1      # Frequenza di invio telemetria di base (default/fallback)
 DEFAULT_ALARM_RESP_MAX   = 40.0   # Soglia tachipnea (Asma pediatrico), su Frequenza Respiratoria EDR
@@ -43,7 +36,8 @@ DEFAULT_ALARM_BATTERY_MIN_PCT = 15.0
 # contatto / sensore guasto) dopo le quali il device pubblica un alert
 # dedicato su TOPIC_ALERT, invece di limitarsi a riportare il
 # device_status nella sola telemetria periodica. Evita di generare un
-# alert per ogni singolo glitch transitorio (es. un contatto che salta per una singola lettura).
+# alert per ogni singolo glitch transitorio (es. un contatto che salta
+# per una singola lettura).
 ALERT_FAULT_STREAK_THRESHOLD = 5
 
 # --- VALORI FISIOLOGICI NOMINALI (Esclusivi per il Simulatore) ---
@@ -53,6 +47,7 @@ TEMP_SKIN_SIM_MIN = 31.0
 TEMP_SKIN_SIM_MAX = 34.0
 RESP_RATE_SIM_MIN = 20.0     
 RESP_RATE_SIM_MAX = 30.0
+
 CONTACT_DROP_PROB = 0.05
 
 # --- SIMULAZIONE BATTERIA (Esclusivamente per il Simulatore) ---

@@ -1,9 +1,9 @@
-# sensor_sim.py - Sorgente dati SIMULATA (usato nella fase di Testing).
+# sensor_sim.py - Sorgente dati SIMULATA (HIL Testing per produzione).
 
 import time
 import random
 import config
-from ntp_time import unix_now
+import ntp_time
 
 class SimSensor:
     def __init__(self):
@@ -30,10 +30,11 @@ class SimSensor:
         """Aggiorna i valori del dizionario pre-esistente senza riallocare memoria."""
         self._contact = random.random() > config.CONTACT_DROP_PROB
 
-        self._payload["timestamp"] = unix_now()
+        self._payload["timestamp"] = ntp_time.unix_time()
         self._payload["sensor_contact"] = self._contact
 
-        # Scarica simulata della batteria (lineare, ciclica): permette di dimostrare l'alert di batteria scarica senza attendere ore reali.
+        # Scarica simulata della batteria (lineare, ciclica): permette di
+        # dimostrare l'alert di batteria scarica senza attendere ore reali.
         # Quando si esaurisce, si "ricarica" istantaneamente (rollover),
         # cosi' la demo puo' girare indefinitamente.
         self._battery_pct -= config.BATTERY_SIM_DRAIN_PER_TICK

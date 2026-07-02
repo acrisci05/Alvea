@@ -43,6 +43,18 @@ def mqtt_command_callback(topic, msg):
             nuovo_patient_id = payload["patient_id"]
             current_patient_id = nuovo_patient_id if nuovo_patient_id else None
             print(f"-> [OK] Device associato al paziente: {current_patient_id}")
+        if "resp_rate_max" in payload:
+            try:
+                alert_mgr.update_thresholds(resp_max=float(payload["resp_rate_max"]))
+                print("-> [OK] Soglia frequenza respiratoria aggiornata.")
+            except (ValueError, TypeError):
+                print("-> [ERRORE] Valore resp_rate_max non valido.")
+        if "battery_min_pct" in payload:
+            try:
+                alert_mgr.update_thresholds(battery_min=float(payload["battery_min_pct"]))
+                print("-> [OK] Soglia batteria minima aggiornata.")
+            except (ValueError, TypeError):
+                print("-> [ERRORE] Valore battery_min_pct non valido.")
 
     except Exception as e:
         print("-> [ERRORE] Parsing del comando MQTT fallito:", e)
@@ -62,11 +74,6 @@ while not wifi_mga.is_connected():
 
 if wifi_mga.is_connected():
     ntp_time.sync_time()
-    try:
-        _ip = wifi_mga.wlan.ifconfig()[0]
-        print("[RETE] IP ESP32:", _ip, "| Broker MQTT:", config.MQTT_BROKER, "porta", config.MQTT_PORT)
-    except Exception as _e:
-        print("[RETE] Impossibile leggere ifconfig:", _e)
 else:
     print("[NTP] Saltata sincronizzazione: nessuna connessione Wi-Fi disponibile.")
 
