@@ -207,7 +207,7 @@ Alvea/
 
 ## 📚 Documentazione
 
-- 📄 **[Relazione tecnica (PDF)](docs/RELAZIONE.pdf)** — sorgente: [`docs/RELAZIONE.tex`](docs/RELAZIONE.tex)
+- 📄 **[Relazione tecnica (PDF)](docs/RELAZIONE.pdf)** 
 - [Analisi dei requisiti](docs/01-analisi-requisiti.md) · [Casi d'uso](docs/02-use-case.md) · [Schema E-R](docs/03-er-schema.md)
 - [Diagrammi di sequenza](docs/04-sequence.md) · [Architettura e API](docs/05-architettura.md) · [Sicurezza](docs/SICUREZZA.md)
 
