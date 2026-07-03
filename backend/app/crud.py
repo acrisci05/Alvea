@@ -291,7 +291,6 @@ async def upsert_thresholds(db: AsyncSession, device_id: str, data: dict, userna
     await db.refresh(row)
     return row
 
-
 # SCHEDA PAZIENTE / ANAMNESI
 async def get_patient_record(db: AsyncSession, device_id: str):
     """Restituisce la scheda paziente del device, o None se non presente."""
