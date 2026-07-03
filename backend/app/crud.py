@@ -10,9 +10,7 @@ from sqlalchemy import desc, func
 
 from . import models, schemas, auth, config
 
-
-# ===================== CAREGIVER =====================
-
+# CAREGIVER
 async def get_caregiver_by_username(db: AsyncSession, username: str):
     """Cerca un caregiver per username. Usata al login e nella verifica JWT."""
     res = await db.execute(
@@ -34,9 +32,7 @@ async def create_caregiver(db: AsyncSession, data: schemas.CaregiverCreate):
     await db.refresh(user)
     return user
 
-
-# ===================== DEVICE =====================
-
+# DEVICE
 async def get_device(db: AsyncSession, device_id: str):
     """Cerca un device per device_id (es. 'ALVEA_04')."""
     res = await db.execute(
@@ -76,7 +72,7 @@ async def ensure_device(db: AsyncSession, device_id: str):
     """Crea il device nel DB se non esiste ancora.
 
     La telemetria MQTT può arrivare prima che il caregiver registri
-    manualmente il device nell'app. In quel caso lo creiamo senza owner;
+    manualmente il device nell'app. In quel caso viene creato senza owner;
     il caregiver lo rivendicherà in seguito tramite POST /devices.
     """
     dev = await get_device(db, device_id)
@@ -111,8 +107,7 @@ async def claim_device_for_patient(db: AsyncSession, device_id: str, owner_id: i
     return dev
 
 
-# ===================== READING =====================
-
+# READING
 async def save_reading(db: AsyncSession, r: dict):
     """Salva una singola lettura di telemetria nel DB.
 
@@ -124,7 +119,6 @@ async def save_reading(db: AsyncSession, r: dict):
     Questo garantisce che il campo 'ts' nel DB rifletta sempre il momento reale
     di acquisizione del dato, non quello di arrivo al backend.
     """
-    # Converti il timestamp Unix del firmware in datetime UTC
     ts_unix = r.get("timestamp")
     if ts_unix:
         ts = datetime.fromtimestamp(ts_unix, tz=timezone.utc).replace(tzinfo=None)
@@ -134,9 +128,9 @@ async def save_reading(db: AsyncSession, r: dict):
     reading = models.Reading(
         device_id        = r["device_id"],
         patient_id       = r.get("patient_id"),       # può essere None se non assegnato
-        ts               = ts,                         # timestamp reale del firmware
+        ts               = ts,                       
         bpm              = r.get("bpm"),
-        skin_temperature = r.get("skin_temperature"),  # nome allineato al firmware
+        skin_temperature = r.get("skin_temperature"),  
         respiration_rate = r.get("respiration_rate"),
         battery_pct      = r.get("battery_pct"),       # può essere None se ADC guasto
         sensor_contact   = r.get("sensor_contact"),
@@ -150,10 +144,6 @@ async def save_reading(db: AsyncSession, r: dict):
 
 async def get_recent_readings(db: AsyncSession, device_id: str, limit: int = 120):
     """Restituisce le ultime `limit` letture in ordine cronologico crescente.
-
-    Ordine crescente (reversed) perché l'app usa questi dati per disegnare
-    grafici da sinistra (più vecchio) a destra (più recente).
-    Default 120 letture = circa 2 minuti di dati a 1 Hz.
     """
     res = await db.execute(
         select(models.Reading)
@@ -165,7 +155,6 @@ async def get_recent_readings(db: AsyncSession, device_id: str, limit: int = 120
 
 async def get_latest_reading(db: AsyncSession, device_id: str):
     """Restituisce l'ultima lettura disponibile per il device.
-
     Usata da GET /devices/{id}/latest: l'app la chiama al primo caricamento
     della schermata di monitoraggio, prima che il WebSocket sia connesso.
     """
@@ -178,8 +167,7 @@ async def get_latest_reading(db: AsyncSession, device_id: str):
     return res.scalars().first()
 
 
-# ===================== STATISTICHE (avg, min, max) =======================
-
+# STATISTICHE (avg, min, max)
 # Parametri vitali su cui ha senso calcolare statistiche
 STAT_FIELDS = {
     "bpm":              models.Reading.bpm,
@@ -235,8 +223,7 @@ async def get_stats(db: AsyncSession, device_id: str, hours: int = 24) -> dict:
     return {"device_id": device_id, "hours": hours, "stats": stats}
 
 
-# ===================== ALERT =====================
-
+# ALERT
 async def save_alert(db: AsyncSession, device_id: str, a: dict):
     """Salva un allarme generato da alerts.evaluate() nel DB.
 
@@ -268,9 +255,7 @@ async def get_recent_alerts(db: AsyncSession, device_id: str, limit: int = 50):
     return res.scalars().all()
 
 
-# ===================== SOGLIE PER-DEVICE (configurabili dal medico) =======
-
-# Le 12 chiavi delle soglie cliniche, condivise tra modello, schema e config.
+# SOGLIE PER-DEVICE (configurabili dal medico)
 _THRESHOLD_FIELDS = (
     "resp_warn_low", "resp_warn_high", "resp_crit_low", "resp_crit_high",
     "bpm_warn_low", "bpm_warn_high", "bpm_crit_low", "bpm_crit_high",
@@ -286,8 +271,7 @@ async def get_threshold_row(db: AsyncSession, device_id: str):
 
 async def get_thresholds(db: AsyncSession, device_id: str) -> dict:
     """Soglie effettive per un device: configurazione dedicata se presente,
-    altrimenti i default di config. Restituisce sempre tutte e 12 le chiavi,
-    pronte per essere passate ad alerts.evaluate().
+    altrimenti i default di config.
     """
     row = await get_threshold_row(db, device_id)
     if row is None:
@@ -308,8 +292,7 @@ async def upsert_thresholds(db: AsyncSession, device_id: str, data: dict, userna
     return row
 
 
-# ===================== SCHEDA PAZIENTE / ANAMNESI =====================
-
+# SCHEDA PAZIENTE / ANAMNESI
 async def get_patient_record(db: AsyncSession, device_id: str):
     """Restituisce la scheda paziente del device, o None se non presente."""
     res = await db.execute(
@@ -331,8 +314,7 @@ async def upsert_patient_record(db: AsyncSession, device_id: str, data: dict, us
     return row
 
 
-# ===================== AUDIT LOG =====================
-
+# AUDIT LOG
 async def write_audit(db: AsyncSession, action: str, username: str | None = None,
                       role: str | None = None, resource: str | None = None,
                       detail: str | None = None, ip: str | None = None):
@@ -355,8 +337,7 @@ async def get_audit_logs(db: AsyncSession, limit: int = 100, device_id: str | No
     return res.scalars().all()
 
 
-# ===================== PUSH TOKEN =====================
-
+# PUSH TOKEN
 async def register_push_token(db: AsyncSession, token: str, owner_id: int,
                               device_id: str | None = None):
     """Registra (o aggiorna) un Expo push token associandolo al proprietario.
