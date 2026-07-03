@@ -19,8 +19,17 @@ import paho.mqtt.client as mqtt
 DEVICE_ID = "ALVEA_04"
 TOPIC = f"alvea/devices/{DEVICE_ID}/telemetry" 
 
+# Stato persistente tra una chiamata e l'altra (valori correnti del "paziente simulato")
+_state = {"bpm": 100.0, "skin_temp": 32.5, "resp": 25.0}
+
+def _walk(current, target_min, target_max, step):
+    """Sposta 'current' di un piccolo passo casuale, restando nel range."""
+    current += random.uniform(-step, step)
+    return max(target_min, min(target_max, current))
+
 def make_reading(scenario):
-    """Genera un dizionario payload JSON identico a quello dell'ESP32 reale."""
+    """Genera un dizionario payload JSON identico a quello dell'ESP32 reale,
+    con valori che evolvono gradualmente invece di saltare a caso ogni secondo."""
     contact = True
     battery = round(random.uniform(60.0, 90.0), 1)
 
@@ -30,43 +39,43 @@ def make_reading(scenario):
         bpm, skin_temp, resp_rate = 0.0, 0.0, 0.0
 
     # 2. SCENARIO: Attacco d'asma (Tachipnea + Tachicardia lieve).
-    #    Alert clinico per soglia generato dal firmware
-    #    (firmware/alerts.py: check_resp_rate, soglia
-    #    config.DEFAULT_ALARM_RESP_MAX = 40.0, gravità CRITICAL).
+    #    Sale gradualmente verso i valori di crisi invece di partire già alto.
     elif scenario == "asthma_attack":
-        bpm = round(random.uniform(115.0, 130.0), 1)
-        skin_temp = round(random.uniform(31.5, 33.5), 1)
-        resp_rate = round(random.uniform(40.0, 50.0), 1)
+        _state["bpm"] = _walk(_state["bpm"], 115.0, 130.0, 2.0)
+        _state["skin_temp"] = _walk(_state["skin_temp"], 31.5, 33.5, 0.3)
+        _state["resp"] = _walk(_state["resp"], 40.0, 50.0, 1.5)
+        bpm = round(_state["bpm"], 1)
+        skin_temp = round(_state["skin_temp"], 1)
+        resp_rate = round(_state["resp"], 1)
 
     # 3. SCENARIO: Nominale (Bambino a riposo/sano)
     else:
-        if random.random() < 0.05:
+        if random.random() < 0.02:  # contatto perso più raro, non ad ogni tick
             contact = False
             bpm, skin_temp, resp_rate = 0.0, 0.0, 0.0
         else:
-            bpm = round(random.uniform(90.0, 110.0), 1)
-            skin_temp = round(random.uniform(31.0, 34.0), 1)
-            resp_rate = round(random.uniform(20.0, 30.0), 1)
+            _state["bpm"] = _walk(_state["bpm"], 90.0, 110.0, 1.5)
+            _state["skin_temp"] = _walk(_state["skin_temp"], 31.0, 34.0, 0.15)
+            _state["resp"] = _walk(_state["resp"], 20.0, 30.0, 0.8)
+            bpm = round(_state["bpm"], 1)
+            skin_temp = round(_state["skin_temp"], 1)
+            resp_rate = round(_state["resp"], 1)
 
     # device_status: stringhe coerenti a quelle del firmware
-    if not contact:
-        status = "ERR_ECG_LEADS_OFF"
-    else:
-        status = "SYSTEM_OK"
+    status = "SYSTEM_OK" if contact else "ERR_ECG_LEADS_OFF"
 
     return {
         "device_id": DEVICE_ID,
         "timestamp": time.time(),
         "bpm": bpm,
-        "skin_temperature": skin_temp,    
-        "respiration_rate": resp_rate,    
+        "skin_temperature": skin_temp,
+        "respiration_rate": resp_rate,
         "battery_pct": battery,
         "sensor_contact": contact,
         "patient_id": "p_0001",
         "device_status": status,
         "source": "sim-pc-script",
     }
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--host", default="localhost", help="IP del broker MQTT")
