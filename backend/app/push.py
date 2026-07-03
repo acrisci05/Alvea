@@ -2,16 +2,11 @@
 #
 # Riceve una lista di Expo push token (registrati dall'app via
 # POST /register-token) e inoltra il messaggio all'endpoint pubblico di Expo.
-# Serve a notificare il caregiver di un alert critico anche quando l'app è in
-# background o chiusa, cosa che le sole notifiche locali non possono fare.
-#
-# Best-effort: ogni errore viene loggato ma NON interrompe la pipeline di
-# ingest della telemetria (il dato e l'alert sono comunque già salvati sul DB).
+# Serve a notificare il caregiver di un alert critico anche quando l'app è in background o chiusa
 import httpx
 
 # Endpoint pubblico del servizio di push di Expo.
 EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
-
 
 async def send_push(tokens, title: str, body: str, data: dict | None = None):
     """Invia una notifica push a tutti i token Expo passati.
