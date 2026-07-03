@@ -11,16 +11,9 @@ from typing import Optional, Literal
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-
-# ===================== CAREGIVER / AUTH =====================
-
+# CAREGIVER / AUTH
 class CaregiverCreate(BaseModel):
     """Payload di POST /register.
-
-    Il ruolo è opzionale (default "caregiver"): l'auto-registrazione di un
-    medico è ammessa solo a scopo didattico. L'app può inviare anche dei dati
-    anagrafici del paziente insieme alla registrazione: campi extra non
-    dichiarati qui vengono ignorati da Pydantic senza errori.
     """
     username: str
     password: str
@@ -35,7 +28,7 @@ class CaregiverCreate(BaseModel):
 
 
 class CaregiverResponse(BaseModel):
-    """Risposta di POST /register e GET /me (la password hashata non si espone)."""
+    """Risposta di POST /register e GET /me"""
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -54,8 +47,6 @@ class Token(BaseModel):
     Oltre al token JWT, restituiamo il ruolo e il device_id principale
     dell'utente: l'app mobile li usa subito dopo il login per scegliere la
     schermata (paziente/medico) e per sapere quale device interrogare
-    (vedi loginUser()/config.js nell'app, che si aspetta
-    { access_token, device_id, role }).
     """
     access_token: str
     token_type: str = "bearer"
@@ -63,8 +54,7 @@ class Token(BaseModel):
     device_id: Optional[str] = None
 
 
-# ===================== DEVICE =====================
-
+# DEVICE
 class DeviceCreate(BaseModel):
     """Payload di POST /devices: registra/rivendica una cavigliera."""
     device_id: str
@@ -87,23 +77,15 @@ class DeviceCommand(BaseModel):
     ble_command_callback (main_real_mqtt.py / main_real_ble.py):
       - publish_period_s: nuova frequenza di invio telemetria (secondi)
       - patient_id: assegna (o rimuove, passando None) il paziente al device
-    Tutti i campi sono opzionali: il backend invia solo quelli effettivamente
-    impostati (vedi filtro `if v is not None` in main.py).
     """
     publish_period_s: Optional[int] = None
     patient_id: Optional[str] = None
 
 
-# ===================== READING =====================
-
+# READING
 class ReadingIn(BaseModel):
     """Valida il payload di telemetria pubblicato dal firmware su
     alvea/devices/<device_id>/telemetry.
-
-    Campi e tipi presi direttamente dal dizionario costruito in
-    main_real_mqtt.py / sensor_sim.py:
-      device_id, patient_id, timestamp, bpm, skin_temperature,
-      respiration_rate, battery_pct, sensor_contact, device_status, source.
     """
     device_id: str
     patient_id: Optional[str] = None
@@ -135,8 +117,7 @@ class ReadingResponse(BaseModel):
     source: Optional[str] = None
 
 
-# ===================== ALERT =====================
-
+# ALERT
 class AlertResponse(BaseModel):
     """Risposta per GET /devices/{id}/alerts."""
     model_config = ConfigDict(from_attributes=True)
@@ -151,8 +132,7 @@ class AlertResponse(BaseModel):
     value: Optional[float] = None
 
 
-# ===================== SOGLIE CLINICHE (config. dal medico) =====================
-
+# SOGLIE CLINICHE
 class ThresholdConfig(BaseModel):
     """Soglie cliniche per-device impostabili dal medico (PUT .../thresholds).
 
@@ -194,8 +174,7 @@ class ThresholdResponse(ThresholdConfig):
     model_config = ConfigDict(from_attributes=True)
 
 
-# ===================== SCHEDA PAZIENTE / ANAMNESI =====================
-
+# SCHEDA PAZIENTE / ANAMNESI
 class PatientRecordUpdate(BaseModel):
     """Payload di PUT /devices/{id}/patient (tutti i campi opzionali)."""
     full_name: Optional[str] = None
@@ -216,8 +195,7 @@ class PatientRecordResponse(PatientRecordUpdate):
     model_config = ConfigDict(from_attributes=True)
 
 
-# ===================== NOTIFICHE PUSH =====================
-
+# NOTIFICHE PUSH
 class PushTokenIn(BaseModel):
     """Payload di POST /register-token (inviato dall'app, vedi api.js).
 
@@ -228,8 +206,7 @@ class PushTokenIn(BaseModel):
     device_id: Optional[str] = None
 
 
-# ===================== AUDIT LOG =====================
-
+# AUDIT LOG
 class AuditLogResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
