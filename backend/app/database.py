@@ -1,8 +1,6 @@
-# database.py - Engine e sessione asincrona SQLAlchemy (pattern del corso).
-#
+# database.py - Engine e sessione asincrona SQLAlchemy.
 # Questo file è il "ponte" tra il codice Python e il database.
-# Si occupa di tre cose: creare la connessione (engine), gestire le sessioni
-# e fornire la classe base da cui ereditano tutti i modelli.
+# Si occupa di creare la connessione (engine), gestire le sessioni e fornire la classe base da cui ereditano tutti i modelli.
 
 # Importa gli strumenti asincroni di SQLAlchemy:
 # - create_async_engine: crea la connessione al DB in modalità asincrona
@@ -15,16 +13,13 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, Asyn
 from sqlalchemy.orm import declarative_base
 
 # Importa l'URL di connessione al DB definito in config.py
-# Es: "sqlite+aiosqlite:///./pulseguard.db"
 from .config import DATABASE_URL
 
 # Crea il motore di connessione al database.
 # È l'oggetto principale che gestisce il pool di connessioni.
-# echo=False → non stampa le query SQL nel terminale (utile mettere True per debug)
 engine = create_async_engine(DATABASE_URL, echo=False)
 
-# Crea la fabbrica di sessioni: ogni volta che serve parlare col DB,
-# si chiede a questa fabbrica una sessione nuova.
+# Crea la fabbrica di sessioni: ogni volta che serve parlare col DB, si chiede a questa fabbrica una sessione nuova.
 # - bind=engine: usa il motore creato sopra
 # - class_=AsyncSession: le sessioni prodotte sono asincrone
 # - expire_on_commit=False: dopo un commit gli oggetti restano utilizzabili
@@ -32,10 +27,8 @@ engine = create_async_engine(DATABASE_URL, echo=False)
 AsyncSessionLocal = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
 
 # Classe base per tutti i modelli ORM del progetto.
-# Ogni modello (Caregiver, Device, Reading, Alert) eredita da Base,
-# così SQLAlchemy sa quali tabelle creare nel DB.
+# Ogni modello (Caregiver, Device, Reading, Alert) eredita da Base, così SQLAlchemy sa quali tabelle creare nel DB.
 Base = declarative_base()
-
 
 async def get_db():
     # Funzione "dependency" di FastAPI: viene iniettata automaticamente
