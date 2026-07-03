@@ -1,18 +1,17 @@
 # alerts.py - Valutazione delle soglie cliniche su una singola lettura.
 #
-# Regola fondamentale (dalla relazione tecnica, Sezione 5.4 — algoritmo anti-panico):
 #   Se sensor_contact == False il firmware ha già azzerato i valori fisiologici.
 #   Il backend NON deve valutare le soglie cliniche su quei valori (sarebbero
 #   falsi positivi). Emette invece un unico allarme TECNICO "fascia staccata".
 #
-# Parametri valutati (dalla relazione, Sezione 5.2):
+# Parametri valutati:
 #   - Frequenza respiratoria  → soglie resp_* (da EDR)
 #   - Frequenza cardiaca BPM  → soglie bpm_*
 #   - Temperatura cutanea     → soglie temp_*
 #
 # Le soglie arrivano come dizionario (chiavi di config.DEFAULT_THRESHOLDS): di
 # default sono quelle globali, ma il medico può configurarne di dedicate per
-# device (DeviceThreshold). Vedi mqtt_ingest.py, che passa le soglie corrette.
+# device (DeviceThreshold).
 from . import config
 
 
@@ -36,9 +35,9 @@ def evaluate(reading: dict, thresholds: dict | None = None) -> list[dict]:
     alerts = []
     contact = reading.get("sensor_contact", True)
 
-    # --- Controllo contatto fascia (anti-panico) ----------------------------
-    # Se la fascia è staccata i valori fisiologici sono 0 (firmware azzera tutto).
-    # Emetti solo l'allarme tecnico e interrompi la valutazione clinica.
+    # --- Controllo contatto fascia (antipanico) ----------------------------
+    # Se la fascia è staccata i valori fisiologici sono 0 (azzerati dal firmware).
+    # Viene emsso solo l'allarme tecnico e interrotta la valutazione clinica.
     if not contact:
         alerts.append(_a(
             parameter="contact",
@@ -49,7 +48,7 @@ def evaluate(reading: dict, thresholds: dict | None = None) -> list[dict]:
         ))
         return alerts
 
-    # --- Frequenza respiratoria (parametro chiave per asma) -----------------
+    # --- Frequenza respiratoria (derivante dalla tecnica EDR) ---
     resp = reading.get("respiration_rate", 0) or 0
     if resp > 0:  # 0 = lettura non ancora valida, nessun allarme
         if resp <= th["resp_crit_low"]:
@@ -65,7 +64,7 @@ def evaluate(reading: dict, thresholds: dict | None = None) -> list[dict]:
             alerts.append(_a("respiration_rate", "resp_high", "warning",
                              f"Frequenza respiratoria alta: {resp} atti/min", resp))
 
-    # --- Frequenza cardiaca (BPM) -------------------------------------------
+    # --- Frequenza cardiaca (BPM) ---
     bpm = reading.get("bpm", 0) or 0
     if bpm > 0:
         if bpm <= th["bpm_crit_low"]:
@@ -81,7 +80,7 @@ def evaluate(reading: dict, thresholds: dict | None = None) -> list[dict]:
             alerts.append(_a("bpm", "bpm_high", "warning",
                              f"BPM sopra soglia: {bpm}", bpm))
 
-    # --- Temperatura cutanea ------------------------------------------------
+    # --- Temperatura cutanea ---
     temp = reading.get("skin_temperature", 0) or 0
     if temp > 0:
         if temp <= th["temp_crit_low"]:
