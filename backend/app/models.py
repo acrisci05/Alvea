@@ -23,7 +23,6 @@ from sqlalchemy.orm import relationship
 # Base: classe base comune da cui ereditano tutti i modelli (definita in database.py)
 from .database import Base
 
-
 class Caregiver(Base):
     """Account utente dell'app (genitore/operatore oppure medico).
 
@@ -54,7 +53,6 @@ class Caregiver(Base):
     # "back_populates" collega le due relazioni tra loro in modo bidirezionale:
     # da caregiver.devices arrivi ai device, da device.owner arrivi al caregiver.
     devices = relationship("Device", back_populates="owner")
-
 
 class Device(Base):
     """La fascia indossabile associata a un bambino."""
@@ -89,7 +87,6 @@ class Device(Base):
     # Relazione verso Alert: un device ha N alert
     alerts = relationship("Alert", back_populates="device")
 
-
 class Reading(Base):
     """Singola lettura di telemetria (1 Hz).
 
@@ -104,8 +101,7 @@ class Reading(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    # device_id è sia chiave esterna (collega a devices.device_id)
-    # sia indicizzata per velocizzare le query "dammi tutte le letture di questo device"
+    # device_id è sia chiave esterna (collega a devices.device_id) sia indicizzata per velocizzare le query
     device_id = Column(String, ForeignKey("devices.device_id"), index=True)
 
     # Paziente assegnato al device al momento della lettura (può essere None
@@ -123,7 +119,7 @@ class Reading(Base):
     # Battito cardiaco in BPM (Pan-Tompkins sull'ECG)
     bpm = Column(Float, nullable=True)
 
-    # Temperatura cutanea in °C (termistore NTC; nome allineato al firmware)
+    # Temperatura cutanea in °C (termistore NTC)
     skin_temperature = Column(Float, nullable=True)
 
     # Percentuale di batteria residua. nullable=True perché può essere None
@@ -143,13 +139,8 @@ class Reading(Base):
     # Relazione verso Device (lato "molti" → "uno")
     device = relationship("Device", back_populates="readings")
 
-
 class Alert(Base):
     """Allarme generato dalla valutazione delle soglie.
-
-    Struttura conforme al requisito (Punto 7, gestione alert): contiene il
-    paziente (device_id), il parametro interessato, la descrizione (message),
-    il livello di gravità (severity) e il timestamp (ts).
     """
 
     __tablename__ = "alerts"
@@ -172,7 +163,7 @@ class Alert(Base):
     # Livello di gravità: "warning" (attenzione), "critical" (urgente), "technical" (fascia staccata)
     severity = Column(String)
 
-    # Messaggio leggibile dall'utente (es. "Bradicardia critica: 55 BPM")
+    # Messaggio leggibile dall'utente
     message = Column(String)
 
     # Valore numerico che ha scatenato l'alert (es. 55.0 per un BPM basso).
@@ -188,8 +179,7 @@ class DeviceThreshold(Base):
 
     Se per un device non esiste una riga in questa tabella, la valutazione
     degli alert usa config.DEFAULT_THRESHOLDS. Ogni modifica è tracciata in
-    AuditLog (vedi PUT /devices/{id}/thresholds). Una riga per device:
-    device_id è chiave primaria.
+    AuditLog
     """
 
     __tablename__ = "device_thresholds"
@@ -218,12 +208,8 @@ class DeviceThreshold(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     updated_by = Column(String, nullable=True)
 
-
 class PatientRecord(Base):
-    """Scheda paziente e anamnesi del bambino associato al device (Punto 9).
-
-    Dati anagrafici di base più le informazioni cliniche richieste dal
-    requisito: patologie note, farmaci in uso, allergie. Una riga per device.
+    """Scheda paziente e anamnesi del bambino associato al device.
     """
 
     __tablename__ = "patient_records"
@@ -268,7 +254,7 @@ class PushToken(Base):
 
     Associato al caregiver (owner) e al device monitorato: quando un device
     genera un alert critico, il backend invia una push ai token del suo
-    proprietario (vedi push.py e mqtt_ingest.py).
+    proprietario
     """
 
     __tablename__ = "push_tokens"
@@ -276,4 +262,3 @@ class PushToken(Base):
     token = Column(String, primary_key=True)
     owner_id = Column(Integer, ForeignKey("caregivers.id"), index=True)
     device_id = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
