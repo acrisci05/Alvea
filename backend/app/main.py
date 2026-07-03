@@ -46,10 +46,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Alvea API", version="1.1.0", lifespan=lifespan)
 
-# CORS: l'app mobile (Expo) e la dashboard web devono poter chiamare l'API
-# anche da origin diversi (es. localhost:19006 in sviluppo Expo).
-# Con origine "*" la specifica CORS vieta allow_credentials=True: lo
-# disattiviamo in quel caso (l'auth usa comunque l'header Bearer, non i cookie).
+# CORS: l'app mobile (Expo) e la dashboard web devono poter chiamare l'API anche da origin diversi
+# Con origine "*" la specifica CORS vieta allow_credentials=True
 _wildcard = "*" in config.CORS_ORIGINS
 app.add_middleware(
     CORSMiddleware,
@@ -61,13 +59,10 @@ app.add_middleware(
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
-
-# ===================== AUTENTICAZIONE / AUTORIZZAZIONE =====================
-
+# AUTENTICAZIONE / AUTORIZZAZIONE
 async def get_current_user(token: str = Depends(oauth2_scheme),
                            db: AsyncSession = Depends(get_db)) -> models.Caregiver:
     """Dependency: decodifica il token JWT e restituisce il Caregiver autenticato.
-
     Usata come dipendenza su tutti gli endpoint che richiedono autenticazione.
     Solleva 401 se il token è assente, scaduto, manomesso o riferito a un
     utente inesistente.
@@ -88,7 +83,6 @@ async def get_current_user(token: str = Depends(oauth2_scheme),
         raise cred_exc
     return user
 
-
 def require_medico(user: models.Caregiver = Depends(get_current_user)) -> models.Caregiver:
     """Dependency per gli endpoint riservati al ruolo medico (RBAC).
     Solleva 403 se l'utente autenticato non è un medico.
@@ -101,12 +95,9 @@ def require_medico(user: models.Caregiver = Depends(get_current_user)) -> models
 async def authorized_device(device_id: str, db: AsyncSession,
                             user: models.Caregiver) -> models.Device:
     """Restituisce il device solo se l'utente è autorizzato a vederlo.
-
     - medico: accesso a qualsiasi device (visione su tutti i pazienti);
     - caregiver: solo i device di cui è proprietario.
     Solleva 404 se il device non esiste, 403 se non è di competenza.
-    Centralizza qui il controllo di proprietà (data isolation) richiesto dal
-    Punto 4: "ogni utente visualizza esclusivamente i propri dati".
     """
     device = await crud.get_device(db, device_id)
     if device is None:
@@ -122,16 +113,14 @@ def _client_ip(request: Request):
     return request.client.host if request.client else None
 
 
-# ===================== HEALTH =====================
-
+# HEALTH 
 @app.get("/")
 def root():
     """Endpoint di health-check: verifica che il container sia attivo."""
     return {"service": "Alvea API", "status": "ok"}
 
 
-# ===================== AUTH =====================
-
+# AUTH 
 def _make_patient_id(username: str) -> str:
     """Genera un patient_id stabile e leggibile a partire dallo username
     (univoco). Se lo username non contiene caratteri alfanumerici utili,
@@ -153,21 +142,10 @@ async def _publish_device_command(device_id: str, payload: dict) -> bool:
     except Exception:
         return False
 
-
 @app.post("/register", response_model=schemas.CaregiverResponse)
 async def register(data: schemas.CaregiverCreate, request: Request,
                    db: AsyncSession = Depends(get_db)):
     """Registra un nuovo account e gli auto-assegna il paziente sul dispositivo.
-
-    Oltre a creare il caregiver, la registrazione:
-      1. genera un patient_id stabile per l'account;
-      2. associa il dispositivo predefinito al caregiver e gli assegna il
-         patient_id (claim_device_for_patient);
-      3. crea la scheda paziente con i dati anagrafici inviati dall'app;
-      4. avvisa il firmware via comando MQTT {"patient_id": ...}, così la
-         telemetria viene subito intestata al paziente e il device esce dallo
-         stato WARN_PATIENT_NOT_ASSIGNED — senza alcun passaggio manuale.
-
     L'invio MQTT è best-effort: se il broker non è raggiungibile la
     registrazione riesce comunque (l'associazione resta salvata nel DB e
     verrà reinviata al device al prossimo comando di configurazione).
@@ -205,14 +183,11 @@ async def register(data: schemas.CaregiverCreate, request: Request,
         patient_id=patient_id, device_id=device_id,
     )
 
-
 @app.post("/login", response_model=schemas.Token)
 async def login(request: Request, form: OAuth2PasswordRequestForm = Depends(),
                 db: AsyncSession = Depends(get_db)):
     """Autentica un utente e restituisce un token JWT Bearer.
-
-    Oltre al token, restituisce il ruolo e il device_id principale dell'utente,
-    come si aspetta l'app (loginUser → { access_token, device_id, role }).
+    Oltre al token, restituisce il ruolo e il device_id principale dell'utente
     Il token va incluso nell'header Authorization: Bearer <token> in tutte le
     richieste agli endpoint protetti.
     """
@@ -222,9 +197,6 @@ async def login(request: Request, form: OAuth2PasswordRequestForm = Depends(),
                                ip=_client_ip(request))
         raise HTTPException(400, "Credenziali errate")
 
-    # Device principale da mostrare nell'app: il primo device del caregiver;
-    # per un medico (che non possiede device propri) ripieghiamo sul primo
-    # device presente nel sistema, così l'app ha comunque qualcosa da aprire.
     devices = await crud.get_devices_for_owner(db, user.id)
     if not devices and user.role == auth.ROLE_MEDICO:
         devices = await crud.get_all_devices(db)
@@ -242,14 +214,12 @@ async def me(user: models.Caregiver = Depends(get_current_user)):
     return user
 
 
-# ===================== DEVICE =====================
-
+# DEVICE
 @app.post("/devices", response_model=schemas.DeviceResponse)
 async def create_device(data: schemas.DeviceCreate, request: Request,
                         db: AsyncSession = Depends(get_db),
                         user: models.Caregiver = Depends(get_current_user)):
     """Associa una cavigliera all'account autenticato.
-
     Se il device esiste già nel DB (es. creato automaticamente dall'ingest MQTT)
     ma non ha un owner, lo associa all'utente corrente.
     """
@@ -281,19 +251,13 @@ async def list_devices(db: AsyncSession = Depends(get_db),
     return await crud.get_devices_for_owner(db, user.id)
 
 
-# ===================== LETTURE / ALERT =====================
-
-# L'app chiama GET /devices/{id}/history; manteniamo anche /readings come
-# alias storico. Stesso handler per entrambe le rotte.
+# LETTURE / ALERT
+# L'app chiama GET /devices/{id}/history
 @app.get("/devices/{device_id}/history", response_model=list[schemas.ReadingResponse])
 @app.get("/devices/{device_id}/readings", response_model=list[schemas.ReadingResponse])
 async def device_readings(device_id: str, request: Request, limit: int = 120,
                           db: AsyncSession = Depends(get_db),
                           user: models.Caregiver = Depends(get_current_user)):
-    """Restituisce le ultime `limit` letture del device (default 120, ~2 minuti a 1 Hz).
-    Usato dall'app per costruire i grafici storici. Richiede l'autorizzazione
-    sul device e viene tracciato nell'audit log.
-    """
     await authorized_device(device_id, db, user)
     await crud.write_audit(db, action="read_history", username=user.username,
                            role=user.role, resource=device_id, ip=_client_ip(request))
@@ -305,7 +269,6 @@ async def device_latest(device_id: str,
                         db: AsyncSession = Depends(get_db),
                         user: models.Caregiver = Depends(get_current_user)):
     """Restituisce l'ultima lettura disponibile del device.
-
     Endpoint ad alta frequenza (polling live prima del WebSocket): autorizzato
     ma non tracciato in audit per non intasare il log.
     """
@@ -314,7 +277,6 @@ async def device_latest(device_id: str,
     if not r:
         raise HTTPException(404, "Nessuna lettura per questo device")
     return r
-
 
 @app.get("/devices/{device_id}/stats")
 async def device_stats(device_id: str, hours: int = 24,
@@ -325,7 +287,6 @@ async def device_stats(device_id: str, hours: int = 24,
     """
     await authorized_device(device_id, db, user)
     return await crud.get_stats(db, device_id, hours=hours)
-
 
 @app.get("/devices/{device_id}/alerts", response_model=list[schemas.AlertResponse])
 async def device_alerts(device_id: str, request: Request, limit: int = 50,
@@ -338,8 +299,7 @@ async def device_alerts(device_id: str, request: Request, limit: int = 50,
     return await crud.get_recent_alerts(db, device_id, limit)
 
 
-# ===================== SOGLIE CLINICHE (config. dal medico) =====================
-
+# SOGLIE CLINICHE (eventualmente configurabili dal medico)
 @app.get("/devices/{device_id}/thresholds", response_model=schemas.ThresholdResponse)
 async def get_device_thresholds(device_id: str, db: AsyncSession = Depends(get_db),
                                 user: models.Caregiver = Depends(get_current_user)):
@@ -355,7 +315,6 @@ async def get_device_thresholds(device_id: str, db: AsyncSession = Depends(get_d
         **th,
     )
 
-
 @app.put("/devices/{device_id}/thresholds", response_model=schemas.ThresholdResponse)
 async def set_device_thresholds(device_id: str, data: schemas.ThresholdConfig,
                                 request: Request, db: AsyncSession = Depends(get_db),
@@ -370,8 +329,7 @@ async def set_device_thresholds(device_id: str, data: schemas.ThresholdConfig,
     return schemas.ThresholdResponse.model_validate(row)
 
 
-# ===================== SCHEDA PAZIENTE / ANAMNESI =====================
-
+# SCHEDA PAZIENTE / ANAMNESI
 @app.get("/devices/{device_id}/patient", response_model=schemas.PatientRecordResponse)
 async def get_patient(device_id: str, request: Request,
                       db: AsyncSession = Depends(get_db),
@@ -384,7 +342,6 @@ async def get_patient(device_id: str, request: Request,
     await crud.write_audit(db, action="read_patient_record", username=user.username,
                            role=user.role, resource=device_id, ip=_client_ip(request))
     return record
-
 
 @app.put("/devices/{device_id}/patient", response_model=schemas.PatientRecordResponse)
 async def update_patient(device_id: str, data: schemas.PatientRecordUpdate,
@@ -399,8 +356,7 @@ async def update_patient(device_id: str, data: schemas.PatientRecordUpdate,
     return record
 
 
-# ===================== COMANDI DEVICE =====================
-
+# COMANDI DEVICE
 # L'app chiama POST /devices/{id}/commands (plurale, come il topic MQTT
 # .../commands); manteniamo /command come alias storico.
 @app.post("/devices/{device_id}/commands", status_code=200)
@@ -413,7 +369,7 @@ async def send_device_command(device_id: str,
     """Invia un comando di configurazione alla cavigliera via MQTT.
 
     Il firmware ascolta il topic alvea/devices/<device_id>/commands e
-    aggiorna la propria configurazione senza riavvio (Punto 8).
+    aggiorna la propria configurazione senza riavvio.
 
     Comandi supportati (DeviceCommand):
       - publish_period_s: frequenza di invio dati (es. 2 = ogni 2 secondi)
@@ -440,8 +396,7 @@ async def send_device_command(device_id: str,
     return {"status": "ok", "device_id": device_id, "command": payload}
 
 
-# ===================== NOTIFICHE PUSH =====================
-
+# NOTIFICHE PUSH
 @app.post("/register-token")
 async def register_push_token(data: schemas.PushTokenIn,
                               db: AsyncSession = Depends(get_db),
@@ -453,8 +408,7 @@ async def register_push_token(data: schemas.PushTokenIn,
     return {"message": "Token registrato"}
 
 
-# ===================== AUDIT LOG (solo medico) =====================
-
+# AUDIT LOG (solo medico)
 @app.get("/audit", response_model=list[schemas.AuditLogResponse])
 async def list_audit(limit: int = 100, device_id: str | None = None,
                      db: AsyncSession = Depends(get_db),
@@ -463,15 +417,10 @@ async def list_audit(limit: int = 100, device_id: str | None = None,
     return await crud.get_audit_logs(db, limit=limit, device_id=device_id)
 
 
-# ===================== REALTIME: WEBSOCKET =====================
-
+# REALTIME: WEBSOCKET
 @app.websocket("/ws/live")
 async def ws_live(ws: WebSocket, token: str | None = None):
     """Canale WebSocket per ricevere la telemetria in tempo reale.
-
-    L'app si connette con /ws/live?token=<JWT> (vedi getWsUrl in config.js).
-    Se viene fornito un token lo validiamo e rifiutiamo la connessione se non è
-    valido; se assente accettiamo comunque (es. dashboard interne sulla LAN).
     """
     if token is not None:
         try:
@@ -488,8 +437,7 @@ async def ws_live(ws: WebSocket, token: str | None = None):
         manager.disconnect(ws)
 
 
-# ===================== REALTIME: SSE =====================
-
+# REALTIME: SSE
 @app.get("/sse/live")
 async def sse_live():
     """Stream Server-Sent Events: alternativa al WebSocket per client che non
