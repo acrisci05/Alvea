@@ -1,19 +1,9 @@
 # influx.py - Scrittura opzionale su InfluxDB dal backend FastAPI.
-#
-# NOTA ARCHITETTURALE: il percorso canonico verso InfluxDB è Node-RED
-# (ESP32 → MQTT → Node-RED → InfluxDB → Grafana). Questo modulo scrive
-# su InfluxDB direttamente dal backend solo se INFLUX_ENABLED=true nel .env,
-# utile se si vuole bypassare Node-RED (es. in test senza docker-compose).
-# Di default è disabilitato per evitare scritture doppie.
-#
-# Import "pigro" (_get_writer inizializzato al primo uso): il backend
-# si avvia correttamente anche se la libreria influxdb-client non è
-# installata o InfluxDB non è raggiungibile.
+
 from datetime import datetime, timezone
 from . import config
 
 _write_api = None
-
 
 def _get_writer():
     """Inizializza il client InfluxDB al primo utilizzo (lazy init)."""
@@ -33,11 +23,9 @@ def _get_writer():
 
 def write_reading(reading: dict):
     """Scrive una lettura su InfluxDB come punto nella measurement 'vitals'.
-
     I tag (device_id, patient_id, source) sono indicizzati e usati da Grafana
     per filtrare per paziente o device. I field sono i valori numerici delle
     serie temporali su cui si calcolano medie, min, max.
-
     Parametri
     ----------
     reading : dict
