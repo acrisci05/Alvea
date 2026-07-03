@@ -1,5 +1,4 @@
-# Copia in .env e personalizza. Valori condivisi da tutto lo stack.
-
+# Valori condivisi da tutto lo stack.
 # InfluxDB (setup automatico al primo avvio)
 INFLUX_USERNAME=admin
 INFLUX_PASSWORD=alvea123
