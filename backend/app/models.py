@@ -89,12 +89,10 @@ class Device(Base):
 
 class Reading(Base):
     """Singola lettura di telemetria (1 Hz).
-
     Campi allineati al payload reale pubblicato dal firmware su
     alvea/devices/<device_id>/telemetry (vedi main_real_mqtt.py /
     main_sim_mqtt.py / sensor_sim.py): device_id, patient_id, timestamp,
-    bpm, skin_temperature, respiration_rate, battery_pct, sensor_contact,
-    device_status, source.
+    bpm, skin_temperature, respiration_rate, battery_pct, sensor_contact, device_status, source.
     """
 
     __tablename__ = "readings"
@@ -176,10 +174,8 @@ class Alert(Base):
 
 class DeviceThreshold(Base):
     """Soglie cliniche configurabili per-device (impostate dal medico).
-
     Se per un device non esiste una riga in questa tabella, la valutazione
-    degli alert usa config.DEFAULT_THRESHOLDS. Ogni modifica è tracciata in
-    AuditLog
+    degli alert usa config.DEFAULT_THRESHOLDS. Ogni modifica è tracciata in AuditLog
     """
 
     __tablename__ = "device_thresholds"
@@ -243,8 +239,8 @@ class AuditLog(Base):
     ts = Column(DateTime, default=datetime.utcnow, index=True)
     username = Column(String, nullable=True, index=True)
     role     = Column(String, nullable=True)
-    action   = Column(String, nullable=False)   # es. "login", "read_history"
-    resource = Column(String, nullable=True)    # es. device_id interessato
+    action   = Column(String, nullable=False) 
+    resource = Column(String, nullable=True)    
     detail   = Column(String, nullable=True)    # dettaglio leggibile
     ip       = Column(String, nullable=True)    # IP del client
 
@@ -254,7 +250,7 @@ class PushToken(Base):
 
     Associato al caregiver (owner) e al device monitorato: quando un device
     genera un alert critico, il backend invia una push ai token del suo
-    proprietario
+    proprietario.
     """
 
     __tablename__ = "push_tokens"
