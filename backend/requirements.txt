@@ -1,9 +1,5 @@
 # requirements.txt - Dipendenze backend Alvea.
-#
-# NOTA: questo file era assente nell'archivio caricato (vedi il file
-# chiamato "requirements.txt" sul disco, che in realtà conteneva il
-# contenuto di realtime.py). Ricostruito sulla base degli import
-# effettivamente presenti nel codice del backend.
+
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
 pydantic==2.9.2
