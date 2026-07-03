@@ -1,55 +1,46 @@
 # config.py - Configurazione backend via variabili d'ambiente (12-factor).
-#
 # Tutte le costanti vengono lette da variabili d'ambiente al momento
-# dell'avvio del container; se la variabile non è impostata si usa il
-# valore di default (utile per sviluppo locale senza docker-compose).
+# dell'avvio del container; se la variabile non è impostata si usa il valore di default
 import os
 
-# --- Database -------------------------------------------------------------
-# SQLite asincrono in locale; in produzione sostituire con Postgres.
+# --- Database ---
+# SQLite asincrono in locale.
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./alvea.db")
 
-# --- Auth -----------------------------------------------------------------
-# Chiave segreta usata per firmare i token JWT. DEVE essere cambiata in
-# produzione (variabile d'ambiente SECRET_KEY nel docker-compose).
+# --- Auth ---
+# Chiave segreta usata per firmare i token JWT.
 SECRET_KEY = os.getenv("SECRET_KEY", "CAMBIAMI_IN_PRODUZIONE")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 
-# --- CORS -----------------------------------------------------------------
+# --- CORS ---
 # Origini autorizzate a chiamare l'API (app mobile Expo / dashboard web).
 # Lista separata da virgole; "*" (default sviluppo) abilita tutte le origini.
-# Nota: con "*" disabilitiamo allow_credentials (vedi main.py), perché la
-# coppia wildcard + credenziali è vietata dalla specifica CORS. L'auth viaggia
-# comunque nell'header Authorization (Bearer), non nei cookie.
 CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()]
 
-# --- MQTT -----------------------------------------------------------------
+# --- MQTT ---
 MQTT_HOST = os.getenv("MQTT_HOST", "mosquitto")   # nome del container broker
 MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
 
 # Il firmware pubblica la telemetria su:
 #   alvea/devices/<device_id>/telemetry
-# Usiamo il wildcard MQTT a livello singolo (+) per sottoscrivere tutti i
-# device con una sola iscrizione. Il device_id viene estratto dal topic
-# nel momento in cui arriva il messaggio (vedi mqtt_ingest.py).
+# Il device_id viene estratto dal topic nel momento in cui arriva il messaggio.
 TOPIC_DATA = os.getenv("TOPIC_DATA", "alvea/devices/+/telemetry")
 
-# Il firmware pubblica allarmi hardware su questo topic separato
+# Il firmware pubblica allarmi hardware sul topic_alert separato
 # (batteria scarica, guasto sensore persistente).
 TOPIC_ALERT = os.getenv("TOPIC_ALERT", "alvea/devices/+/alerts")
 
-# Il backend pubblica comandi verso il firmware su questo topic.
+# Il backend pubblica comandi verso il firmware sul topic_cmd_template.
 # Sostituire <device_id> con l'id reale prima di pubblicare.
 TOPIC_CMD_TEMPLATE = "alvea/devices/{device_id}/commands"
 
 # Dispositivo predefinito a cui viene auto-assegnato il paziente al momento
 # della registrazione (deve coincidere con DEVICE_ID nel firmware ESP32,
-# config.py lato firmware: "ALVEA_04"). In un deployment con piu' cavigliere
-# l'associazione avverrebbe rivendicando il device_id stampato sulla fascia.
+# config.py lato firmware: "ALVEA_04").
 DEFAULT_DEVICE_ID = os.getenv("DEFAULT_DEVICE_ID", "ALVEA_04")
 
-# --- InfluxDB (serie temporali, opzionale) --------------------------------
+# --- InfluxDB (serie temporali, opzionale) ---
 INFLUX_URL     = os.getenv("INFLUX_URL",    "http://influxdb:8086")
 INFLUX_TOKEN   = os.getenv("INFLUX_TOKEN",  "")
 INFLUX_ORG     = os.getenv("INFLUX_ORG",    "alvea")
@@ -57,18 +48,16 @@ INFLUX_BUCKET  = os.getenv("INFLUX_BUCKET", "vitals")
 # Disabilitato di default; abilitare con INFLUX_ENABLED=true nel .env
 INFLUX_ENABLED = os.getenv("INFLUX_ENABLED", "false").lower() == "true"
 
-# --- Soglie cliniche (dalla relazione tecnica, Sezione 5) -----------------
+# --- Soglie cliniche ---
 # Il dispositivo ha un unico sensore biomedicale (ECG AD8232): da esso si
-# ricavano il battito (BPM) e, tramite EDR, la frequenza respiratoria. La
-# temperatura cutanea arriva dal termistore NTC.
-#
-# Frequenza respiratoria (atti/min) — parametro chiave per l'asma
+# ricavano il battito (BPM) e, tramite EDR, la frequenza respiratoria. La temperatura cutanea arriva dal termistore NTC.
+# Frequenza respiratoria (atti/min)
 RESP_WARN_LOW  = 14     # warning se FR < 14
 RESP_WARN_HIGH = 30     # warning se FR > 30
 RESP_CRIT_LOW  = 10     # critico se FR <= 10  (apnea/bradipnea)
 RESP_CRIT_HIGH = 40     # critico se FR >= 40  (tachipnea severa, crisi asmatica)
 
-# Frequenza cardiaca (BPM) — fascia scolare 6-12 anni (default prototipo)
+# Frequenza cardiaca (BPM)
 BPM_WARN_LOW   = 70     # warning se BPM < 70
 BPM_WARN_HIGH  = 130    # warning se BPM > 130
 BPM_CRIT_LOW   = 60     # critico se BPM <= 60  (bradicardia)
@@ -81,13 +70,10 @@ TEMP_CRIT_LOW  = 35.0   # critico se temp <= 35.0 (ipotermia)
 TEMP_CRIT_HIGH = 38.5   # critico se temp >= 38.5 (febbre alta)
 
 # Secondi consecutivi di sensor_contact=False prima di emettere
-# l'allarme tecnico "fascia staccata" (debounce anti-panico).
+# l'allarme tecnico "fascia staccata" (debounce antipanico).
 CONTACT_LOST_DEBOUNCE_S = 5
 
-# Soglie di default per-device: usate quando il medico non ha configurato
-# soglie dedicate per uno specifico dispositivo (vedi modello DeviceThreshold
-# e PUT /devices/{id}/thresholds). La funzione alerts.evaluate() accetta un
-# dizionario con esattamente queste chiavi.
+# Soglie di default per-device: usate quando il medico non ha configurato soglie dedicate per uno specifico dispositivo
 DEFAULT_THRESHOLDS = {
     "resp_warn_low":  RESP_WARN_LOW,
     "resp_warn_high": RESP_WARN_HIGH,
