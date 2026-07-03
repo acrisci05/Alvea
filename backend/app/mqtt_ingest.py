@@ -7,8 +7,6 @@
 #   4) valuta le soglie (per-device se configurate) -> salva gli eventuali alert
 #   5) invia una notifica push al proprietario se c'è un alert critico
 #   6) fa broadcast realtime (WebSocket + SSE) verso i client
-#
-# Pattern derivato da test_mqtt/main.py del corso (aiomqtt + lifespan).
 
 import asyncio  # per la gestione asincrona e il sleep tra i retry
 import json     # per decodificare il payload JSON che arriva dall'ESP32
@@ -16,9 +14,9 @@ import aiomqtt  # libreria asincrona per connettersi al broker MQTT
 
 # Importa i moduli interni del backend
 from . import config, crud, alerts, influx, push
-from .database import AsyncSessionLocal  # fabbrica di sessioni DB
-from .realtime import publish_event      # funzione che manda i dati in real-time ai client
-from .schemas import ReadingIn           # schema Pydantic per validare il payload
+from .database import AsyncSessionLocal  
+from .realtime import publish_event      
+from .schemas import ReadingIn           
 
 
 async def listen_to_mqtt():
@@ -31,8 +29,7 @@ async def listen_to_mqtt():
     while True:
         try:
             # Apre la connessione al broker MQTT (es. Eclipse Mosquitto nel container Docker).
-            # "async with" garantisce che la connessione venga chiusa correttamente
-            # anche in caso di errore.
+            # "async with" garantisce che la connessione venga chiusa correttamente, anche in caso di errore.
             async with aiomqtt.Client(config.MQTT_HOST, config.MQTT_PORT) as client:
 
                 # Si sottoscrive al topic su cui l'ESP32 pubblica la telemetria...
@@ -42,8 +39,7 @@ async def listen_to_mqtt():
                 # ...e al topic separato su cui il firmware pubblica gli alert
                 # hardware/locali (batteria scarica, leads-off persistente,
                 # tachipnea rilevata localmente). Senza questa sottoscrizione
-                # quegli alert non arrivano mai al backend (vedi alerts.py
-                # del firmware / AlertManager._send -> TOPIC_ALERT).
+                # quegli alert non arrivano mai al backend
                 await client.subscribe(config.TOPIC_ALERT)
                 print("[mqtt] sottoscritto a", config.TOPIC_ALERT)
 
@@ -54,9 +50,7 @@ async def listen_to_mqtt():
                     topic_str = str(message.topic)
                     payload_str = message.payload.decode()
 
-                    # Smista il messaggio in base al topic: la telemetria
-                    # (.../telemetry) e gli alert hardware (.../alerts) hanno
-                    # schema e gestione diversi.
+                    # Smista il messaggio in base al topic
                     if topic_str.endswith("/alerts"):
                         await _handle_alert_message(payload_str)
                     else:
@@ -80,7 +74,7 @@ async def _handle_message(payload_str: str):
     # Gestisce un singolo messaggio MQTT di telemetria ricevuto dall'ESP32.
     # Il prefisso _ indica che è una funzione privata, usata solo internamente.
 
-    # === STEP 1: VALIDAZIONE PAYLOAD ===
+    # STEP 1: VALIDAZIONE PAYLOAD
     try:
         # Decodifica la stringa JSON in un dizionario Python
         data = json.loads(payload_str)
@@ -100,7 +94,7 @@ async def _handle_message(payload_str: str):
     # usare anche nel broadcast realtime fuori dal blocco DB.
     fired = []
 
-    # === STEP 2, 3, 4, 5: DATABASE ===
+    # STEP 2, 3, 4, 5: DATABASE
     # Apre una sessione DB per tutte le operazioni di scrittura.
     async with AsyncSessionLocal() as db:
 
@@ -139,7 +133,7 @@ async def _handle_message(payload_str: str):
                     {"device_id": reading["device_id"]},
                 )
 
-    # === STEP 6: BROADCAST REALTIME ===
+    # STEP 6: BROADCAST REALTIME
     # Manda i dati a tutti i client connessi (app mobile via WebSocket, dashboard via SSE).
     # Viene fatto FUORI dal blocco "async with db" perché non riguarda il DB:
     # anche se il broadcast fallisse, il dato è già salvato in modo sicuro.
@@ -157,7 +151,6 @@ async def _handle_message(payload_str: str):
         "alerts": fired,                                 # lista degli alert generati (può essere [])
     })
 
-
 # Mappa gravità del firmware (AlertManager._build_alert, vedi alerts.py
 # firmware) -> severity usata dal backend (alerts.py / models.Alert).
 _FIRMWARE_SEVERITY_MAP = {
@@ -166,17 +159,11 @@ _FIRMWARE_SEVERITY_MAP = {
     "INFO": "technical",
 }
 
-
 async def _handle_alert_message(payload_str: str):
     """Gestisce un alert hardware/locale pubblicato dal firmware su
     alvea/devices/<device_id>/alerts (vedi AlertManager in alerts.py del
     firmware: batteria scarica, leads-off persistente, tachipnea rilevata
     localmente, guasto sensore temperatura).
-
-    Il firmware usa un formato diverso da quello generato da
-    backend.alerts.evaluate(): {device_id, patient_id, parametro,
-    descrizione, gravita, timestamp}. Qui lo traduciamo nel formato salvato
-    da crud.save_alert(): {parameter, kind, severity, message, value}.
     """
     try:
         data = json.loads(payload_str)
@@ -206,8 +193,6 @@ async def _handle_alert_message(payload_str: str):
                 await push.send_push(tokens, "Alvea — allarme dispositivo",
                                      alert["message"], {"device_id": device_id})
 
-    # Broadcast realtime: stesso canale usato per le letture, type diverso
-    # così l'app può distinguere un evento "reading" da un alert standalone.
     await publish_event({
         "type": "alert",
         "device_id": device_id,
