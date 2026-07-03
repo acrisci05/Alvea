@@ -1,8 +1,7 @@
 # realtime.py - Gestione connessioni realtime verso client (app/dashboard web).
 #
 # Espone un ConnectionManager per WebSocket (push bidirezionale) e una coda
-# broadcast riusabile anche per Server-Sent Events. Pattern derivato dagli
-# esempi WebSocket/SSE del corso.
+# broadcast riusabile anche per Server-Sent Events.
 
 import asyncio
 import json
@@ -18,7 +17,6 @@ class ConnectionManager:
     def __init__(self):
         # Lista di tutte le connessioni WebSocket attualmente aperte.
         # Può essere vuota (nessun client connesso) o contenere più connessioni
-        # (es. genitore connesso sia da telefono che da browser).
         self.active: List[WebSocket] = []
 
     async def connect(self, ws: WebSocket):
@@ -43,7 +41,7 @@ class ConnectionManager:
         dead = []
 
         # Serializza il dizionario in stringa JSON una sola volta per tutti i client.
-        # default=str converte tipi non serializzabili (es. datetime) in stringa.
+        # default=str converte tipi non serializzabili in stringa.
         text = json.dumps(message, default=str)
 
         for ws in self.active:
@@ -52,7 +50,7 @@ class ConnectionManager:
                 await ws.send_text(text)
             except Exception:
                 # Se l'invio fallisce (client disconnesso senza avvisare),
-                # lo aggiunge alla lista dei morti invece di rimuoverlo subito
+                # lo aggiunge alla lista dei "morti" invece di rimuoverlo subito
                 # (non si modifica una lista mentre la si sta iterando).
                 dead.append(ws)
 
@@ -60,20 +58,15 @@ class ConnectionManager:
         for ws in dead:
             self.disconnect(ws)
 
-
 # Coda asincrona per il fan-out verso gli stream SSE.
 # SSE (Server-Sent Events) è un'alternativa al WebSocket: connessione
 # unidirezionale dal server al client, più semplice ma sufficiente per
 # mandare dati in tempo reale verso una dashboard web.
-# La coda funziona come una "cassetta delle lettere": publish_event() mette
-# i messaggi dentro, l'endpoint /sse/live li legge e li manda ai client.
 sse_queue: "asyncio.Queue[dict]" = asyncio.Queue()
 
 # Istanza globale del ConnectionManager.
-# È una sola per tutta l'applicazione: tutti gli endpoint e i task
-# che vogliono mandare dati in real-time usano questo oggetto.
+# È una sola per tutta l'applicazione
 manager = ConnectionManager()
-
 
 async def publish_event(message: dict):
     # Punto di ingresso unico per mandare un evento in real-time a tutti i client.
@@ -86,8 +79,7 @@ async def publish_event(message: dict):
     try:
         # Mette il messaggio nella coda SSE senza aspettare (put_nowait = non bloccante).
         # L'endpoint /sse/live leggerà il messaggio dalla coda e lo manderà ai client SSE.
-        # Se la coda fosse piena (QueueFull), scarta il messaggio silenziosamente:
-        # in un sistema real-time a 1 Hz è preferibile perdere un dato piuttosto che bloccarsi.
+        # Se la coda fosse piena (QueueFull), scarta il messaggio silenziosamente
         sse_queue.put_nowait(message)
     except asyncio.QueueFull:
         pass
