@@ -1,5 +1,4 @@
 # docker-compose.yml — Stack completo Alvea
-#
 # Architettura:
 #   ESP32 --MQTT--> Mosquitto --+--> Node-RED --> InfluxDB <-- Grafana
 #                               |                              (dashboard medico)
@@ -8,15 +7,13 @@
 #                                    WebSocket/REST
 #                                        |
 #                                    App mobile (caregiver)
-#
 # Avvio: docker compose up -d
 # Variabili configurabili nel file .env (vedi .env.example)
 
 services:
 
-  # --- Broker MQTT ---------------------------------------------------------
-  # Mosquitto riceve la telemetria dal firmware ESP32 e la distribuisce
-  # a Node-RED e al backend FastAPI tramite pub/sub.
+  # --- Broker MQTT ---
+  # Mosquitto riceve la telemetria dal firmware ESP32 e la distribuisce a Node-RED e al backend FastAPI tramite pub/sub.
   mosquitto:
     image: eclipse-mosquitto:2
     container_name: alvea_mosquitto
@@ -29,7 +26,7 @@ services:
       - ./mosquitto/data:/mosquitto/data
       - ./mosquitto/log:/mosquitto/log
 
-  # --- Database serie temporali --------------------------------------------
+  # --- Database serie temporali ---
   # InfluxDB v2 salva tutte le letture storiche scritte da Node-RED.
   # Grafana lo interroga per costruire i grafici della dashboard medico.
   influxdb:
@@ -48,7 +45,7 @@ services:
     volumes:
       - influxdb_data:/var/lib/influxdb2
 
-  # --- Pipeline dati IoT (Node-RED) ----------------------------------------
+  # --- Pipeline dati IoT (Node-RED) ---
   # Node-RED sottoscrive alvea/devices/+/telemetry, valuta le soglie cliniche,
   # scrive le serie temporali su InfluxDB e ripubblica gli alert su MQTT.
   # Il flow è definito in nodered/data/flows.json (caricato automaticamente).
@@ -70,7 +67,7 @@ services:
       - mosquitto
       - influxdb
 
-  # --- Dashboard medico (Grafana) ------------------------------------------
+  # --- Dashboard medico (Grafana) ---
   # Grafana espone la dashboard provisionata automaticamente da
   # grafana/provisioning/. Usa InfluxDB come datasource.
   grafana:
@@ -91,12 +88,11 @@ services:
     depends_on:
       - influxdb
 
-  # --- Backend applicativo (FastAPI) ---------------------------------------
+  # --- Backend applicativo (FastAPI) ---
   # FastAPI gestisce autenticazione JWT, REST API, WebSocket e SSE.
   # Salva le letture su SQLite (percorso canale app mobile).
   # Legge la telemetria direttamente da MQTT (indipendente da Node-RED).
-  # La scrittura su InfluxDB dal backend è opzionale e disabilitata di
-  # default: Node-RED è il percorso canonico per InfluxDB.
+  # La scrittura su InfluxDB dal backend è opzionale e disabilitata di default: Node-RED è il percorso canonico per InfluxDB.
   backend:
     build: ../backend
     container_name: alvea_backend
