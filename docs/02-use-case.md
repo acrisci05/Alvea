@@ -1,10 +1,11 @@
 # Fase 3 — Diagramma dei Casi d'Uso
 
-Attori: **Paziente / Caregiver** (attore primario, unico ruolo applicativo
-oggi implementato), **Medico** (attore primario con permessi estesi —
-ruolo *progettato*, non ancora distinto a livello di autenticazione, vedi
-nota in fondo), e **Dispositivo ESP32** (attore secondario che immette
-telemetria e riceve configurazioni).
+Attori: **Paziente / Caregiver** (attore primario, lato genitore: monitora e
+consulta i propri dati), **Medico** (attore primario con permessi estesi: vede
+tutti i pazienti, configura le soglie cliniche e consulta l'audit log) e
+**Dispositivo ESP32** (attore secondario che immette telemetria e riceve
+configurazioni). La distinzione dei due ruoli applicativi è **implementata** nel
+backend (RBAC sul campo `role`); vedi la nota in fondo.
 
 ```mermaid
 flowchart LR
@@ -19,10 +20,12 @@ flowchart LR
         UC3(["Ricevere e visualizzare alert"])
         UC4(["Consultare storico e statistiche"])
         UC5(["Configurare parametri device"])
-        UC6(["Gestire scheda anamnestica (progettato)"])
+        UC6(["Gestire scheda paziente / anamnesi"])
         UC7(["Inviare telemetria clinica"])
         UC8(["Ricevere comandi di configurazione"])
         UC9(["Valutare soglie e generare alert"])
+        UC10(["Configurare soglie cliniche"])
+        UC11(["Consultare audit log"])
     end
     
     subgraph attori_secondari[" "]
@@ -39,6 +42,8 @@ flowchart LR
     MED --> UC4
     MED --> UC5
     MED --> UC6
+    MED --> UC10
+    MED --> UC11
 
     ESP --> UC7
     ESP --> UC8
@@ -67,9 +72,13 @@ flowchart LR
 
 ## Nota sui ruoli
 
-Il backend attuale (`backend/app/models.py`) ha una sola entità utente,
-`Caregiver`, senza distinzione di ruolo: l'attore "Medico" qui sopra
-rappresenta l'uso *progettato* del sistema (vedi `docs/RELAZIONE.tex`,
-Sezione "Ruoli, Autenticazione e Multitenancy"). Nell'app mobile, le
-funzionalità pensate per il Medico (dashboard Grafana, configurazione
-remota del device) sono oggi visibili a qualunque Caregiver autenticato.
+La distinzione dei ruoli è **implementata** nel backend: l'entità `Caregiver`
+(`backend/app/models.py`) ha un campo `role` (`caregiver` | `medico`) incluso
+nel token JWT. Gli endpoint riservati al medico — configurazione delle soglie
+(`PUT /devices/{id}/thresholds`) e consultazione dell'audit log (`GET /audit`) —
+sono protetti dalla dipendenza `require_medico`, mentre l'isolamento dei dati
+per proprietario è centralizzato in `authorized_device()` e vale anche sul
+canale realtime (WebSocket/SSE). Nell'app mobile la distinzione è agganciata al
+`role` restituito dal login: le funzionalità del medico (dashboard Grafana,
+configurazione del device) sono mostrate solo all'utente con ruolo `medico`.
+Dettagli in `docs/SICUREZZA.md`.

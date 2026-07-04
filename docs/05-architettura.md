@@ -35,7 +35,7 @@ Tre percorsi paralleli, **stesso payload**:
 
 ## Modello 4+1 (sintesi)
 
-- **Vista logica:** Caregiver, Device, Reading, Alert (vedi E-R). Nessuna distinzione di ruolo a livello di dati (RBAC Medico/Paziente è PLAN, non IMPL — vedi `docs/RELAZIONE.tex`).
+- **Vista logica:** Caregiver (con campo `role`: `caregiver`/`medico`), Device, Reading, Alert, DeviceThreshold, PatientRecord, AuditLog (vedi E-R). L'RBAC Medico/Paziente è **implementato** sia a livello di dati sia di autorizzazione (campo `role`, `authorized_device()`, `require_medico`; isolamento esteso al canale realtime).
 - **Vista di processo:** task asincroni sull'Edge (lettura sensori non bloccante 250Hz/50Hz) e sul Server (listener MQTT + endpoint REST/WebSocket concorrenti tramite `asyncio`).
 - **Vista di sviluppo:** monorepo a moduli — `firmware/`, `backend/`,
   `docker-stack/`, `mobile/`, `scripts/`, `docs/`.

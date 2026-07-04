@@ -5,7 +5,7 @@ Progetto **Alvea** — dispositivo indossabile da caviglia per il monitoraggio d
 > Formato `RQ-XX` come da Incontro 03. Tipo: **F** funzionale / **NF** non
 > funzionale. Priorità: intero in `[0,5]` (0 = massima). Stato: **IMPL**
 > implementato nel repository sorgente, **PLAN** progettato ma non ancora
-> realizzato (vedi anche `docs/RELAZIONE.tex`, Sezione "Stato di
+> realizzato (vedi anche `docs/RELAZIONE.pdf`, Sezione "Stato di
 > Implementazione").
 
 ## Requisiti funzionali
