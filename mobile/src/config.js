@@ -22,7 +22,7 @@ export const PATIENT_INFO_KEY = "alvea_patient_info";
 // disponibile, idealmente con un utente Grafana di tipo "Viewer" dedicato
 // ai medici (solo lettura, nessuna modifica alle dashboard).
 export const GRAFANA_URL =
-  "http://192.168.1.50:3000/d/alvea-monitor/alvea-monitoraggio-paziente?orgId=1&kiosk";
+  "http://192.168.1.50:3000/d/alvea-asthma-dashboard/alvea-monitoraggio-asma-pediatrico?orgId=1&kiosk";
 
 // Distinzione ruolo medico/genitore (Punto 4 dei requisiti). Con backend reale
 // l'app mostra le funzionalità riservate al medico (dashboard Grafana e
