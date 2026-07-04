@@ -28,9 +28,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import jwt
 
 from . import models, schemas, auth, crud, config
-from .database import engine, get_db, Base
+from .database import engine, get_db, Base, AsyncSessionLocal
 from .mqtt_ingest import listen_to_mqtt
-from .realtime import manager, sse_queue
+from .realtime import manager, sse_subscribe, sse_unsubscribe
 
 
 @asynccontextmanager
@@ -106,6 +106,35 @@ async def authorized_device(device_id: str, db: AsyncSession,
         raise HTTPException(status.HTTP_403_FORBIDDEN,
                             "Accesso negato: device non di tua competenza")
     return device
+
+
+async def _realtime_scope(token: str | None) -> tuple[bool, set[str] | None]:
+    """Ricava dal token JWT l'ambito di visibilità per un canale realtime
+    (WebSocket/SSE). Ritorna una coppia (autorizzato, ambito):
+      - (False, None)      token assente, non valido o utente inesistente;
+      - (True, None)       utente medico: vede la telemetria di TUTTI i device;
+      - (True, {id, ...})  utente caregiver: solo i device di cui è proprietario.
+    L'ambito viene passato al ConnectionManager/SSE per filtrare il broadcast,
+    così l'isolamento dei dati vale anche in tempo reale e non solo sulle REST.
+    """
+    if not token:
+        return (False, None)
+    try:
+        payload = auth.decode_token(token)
+    except jwt.PyJWTError:
+        return (False, None)
+    username = payload.get("sub")
+    if not username:
+        return (False, None)
+    # Sessione DB dedicata: il WebSocket non usa la dependency get_db.
+    async with AsyncSessionLocal() as db:
+        user = await crud.get_caregiver_by_username(db, username)
+        if user is None:
+            return (False, None)
+        if user.role == auth.ROLE_MEDICO:
+            return (True, None)  # medico: nessun filtro, vede tutti
+        devices = await crud.get_devices_for_owner(db, user.id)
+        return (True, {d.device_id for d in devices})
 
 
 def _client_ip(request: Request):
@@ -421,14 +450,18 @@ async def list_audit(limit: int = 100, device_id: str | None = None,
 @app.websocket("/ws/live")
 async def ws_live(ws: WebSocket, token: str | None = None):
     """Canale WebSocket per ricevere la telemetria in tempo reale.
+
+    Richiede un token JWT valido come query string (?token=..., come fa l'app):
+    dal token si ricava l'ambito di visibilità dell'utente, così il genitore
+    riceve SOLO la telemetria dei propri device e il medico quella di tutti
+    (isolamento dei dati anche sul canale realtime). Una connessione senza
+    token o con token non valido viene rifiutata.
     """
-    if token is not None:
-        try:
-            auth.decode_token(token)
-        except jwt.PyJWTError:
-            await ws.close(code=status.WS_1008_POLICY_VIOLATION)
-            return
-    await manager.connect(ws)
+    authorized, scope = await _realtime_scope(token)
+    if not authorized:
+        await ws.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+    await manager.connect(ws, scope)
     try:
         while True:
             # Manteniamo aperto il canale; i messaggi dal client sono ignorati.
@@ -439,15 +472,30 @@ async def ws_live(ws: WebSocket, token: str | None = None):
 
 # REALTIME: SSE
 @app.get("/sse/live")
-async def sse_live():
+async def sse_live(token: str | None = None):
     """Stream Server-Sent Events: alternativa al WebSocket per client che non
     supportano WebSocket (es. alcune versioni del browser su HTTP/2).
+
+    Come il WebSocket richiede un token JWT valido (?token=...) e filtra la
+    telemetria per ambito (medico = tutti, caregiver = solo i propri device).
+    Ogni client ha una coda dedicata, così l'evento raggiunge tutti gli
+    abbonati autorizzati.
     """
+    authorized, scope = await _realtime_scope(token)
+    if not authorized:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token non valido o assente")
+    subscriber = sse_subscribe(scope)
+
     async def event_generator():
-        while True:
-            event = await sse_queue.get()
-            yield "event: reading\n"
-            yield f"data: {json.dumps(event, default=str)}\n\n"
+        try:
+            while True:
+                event = await subscriber.queue.get()
+                yield "event: reading\n"
+                yield f"data: {json.dumps(event, default=str)}\n\n"
+        finally:
+            # A stream chiuso (client disconnesso) rimuove l'abbonato.
+            sse_unsubscribe(subscriber)
+
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",

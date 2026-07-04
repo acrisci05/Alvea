@@ -134,7 +134,9 @@ async def _handle_message(payload_str: str):
                 )
 
     # STEP 6: BROADCAST REALTIME
-    # Manda i dati a tutti i client connessi (app mobile via WebSocket, dashboard via SSE).
+    # Inoltra i dati ai client connessi AUTORIZZATI a vederli (app mobile via
+    # WebSocket, dashboard via SSE): il genitore riceve solo i propri device, il
+    # medico tutti (l'isolamento è applicato in realtime.publish_event).
     # Viene fatto FUORI dal blocco "async with db" perché non riguarda il DB:
     # anche se il broadcast fallisse, il dato è già salvato in modo sicuro.
     await publish_event({

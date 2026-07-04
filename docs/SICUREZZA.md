@@ -42,9 +42,13 @@ Ogni accesso ai dati di un device passa dalla dipendenza `authorized_device()`:
 
 Questo garantisce il requisito *"ogni utente visualizza esclusivamente i propri dati"*.
 
-Il canale realtime `/ws/live` accetta il JWT come query string (`?token=...`,
-come fa l'app): se il token è presente viene validato e una connessione con
-token non valido viene rifiutata.
+L'isolamento vale **anche sul canale realtime**: `/ws/live` (WebSocket) e
+`/sse/live` (SSE) richiedono un JWT valido come query string (`?token=...`,
+come fa l'app) e una connessione senza token o con token non valido viene
+rifiutata. Dal token il backend ricava l'ambito di visibilità e filtra il
+broadcast: il `caregiver` riceve in tempo reale **solo** la telemetria dei
+propri device, il `medico` quella di tutti. Così un genitore non può ricevere,
+nemmeno via WebSocket, le letture del figlio di un altro utente.
 
 ## Gestione alert (core)
 
