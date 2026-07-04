@@ -14,7 +14,6 @@ venv/
 # Database locali
 *.db
 *.sqlite3
-pulseguard.db
 
 # Dati runtime dei container (montati, non versionati)
 docker-stack/mosquitto/data/*
@@ -34,7 +33,6 @@ web-build/
 .DS_Store
 .vscode/
 .idea/
-.claude/
 
 # LaTeX (file ausiliari di compilazione; teniamo .tex e .pdf)
 *.aux
