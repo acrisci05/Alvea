@@ -5,7 +5,7 @@
 ```mermaid
 flowchart TD
     subgraph Edge["Edge — ESP32 (Cavigliera Alvea)"]
-        S1[Sensore reale: ECG (AD8232) + NTC<br/>o Simulatore HIL]
+        S1["Sensore reale: ECG (AD8232) + NTC<br/>o Simulatore HIL"]
         FW[Firmware MicroPython<br/>Asincrono]
         S1 --> FW
     end
