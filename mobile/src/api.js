@@ -11,6 +11,9 @@ const MOCK_DEVICE_ID = "ALVEA_04";
 const MOCK_LOGIN_RESPONSE = {
   access_token: "demo-token-alvea-2024",
   device_id: MOCK_DEVICE_ID,
+  // In DEMO_MODE simuliamo un accesso da medico, così la demo mostra anche le
+  // funzionalità riservate al medico (dashboard Grafana, configurazione device).
+  role: "medico",
 };
 
 // Campi e nomi allineati al payload reale del device (vedi "reading" in

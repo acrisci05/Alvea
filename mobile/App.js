@@ -8,10 +8,15 @@ import MonitorScreen from "./src/MonitorScreen";
 
 const SESSION_TOKEN_KEY = "alvea_token";
 const SESSION_DEVICE_KEY = "alvea_device_id";
+// Ruolo dell'utente (caregiver | medico) restituito dal login: lo conserviamo
+// in sessione per distinguere lato genitore e lato medico anche alla riapertura
+// dell'app, senza costringere l'utente a rifare il login (Punto 4 dei requisiti).
+const SESSION_ROLE_KEY = "alvea_role";
 
 export default function App() {
   const [token, setToken] = useState(null);
   const [deviceId, setDeviceId] = useState(null);
+  const [role, setRole] = useState(null);
   const [showSplash, setShowSplash] = useState(true);
 
   useEffect(() => {
@@ -19,9 +24,11 @@ export default function App() {
       try {
         const savedToken = await SecureStore.getItemAsync(SESSION_TOKEN_KEY);
         const savedDeviceId = await SecureStore.getItemAsync(SESSION_DEVICE_KEY);
+        const savedRole = await SecureStore.getItemAsync(SESSION_ROLE_KEY);
         if (savedToken && savedDeviceId) {
           setToken(savedToken);
           setDeviceId(savedDeviceId);
+          setRole(savedRole);
         }
         await new Promise((resolve) => setTimeout(resolve, 1500));
       } catch (e) {
@@ -33,26 +40,33 @@ export default function App() {
     prepare();
   }, []);
 
-  const handleLogin = async (newToken, newDeviceId) => {
+  const handleLogin = async (newToken, newDeviceId, newRole) => {
     try {
       await SecureStore.setItemAsync(SESSION_TOKEN_KEY, newToken);
       await SecureStore.setItemAsync(SESSION_DEVICE_KEY, newDeviceId);
+      // Il ruolo può essere assente (backend più vecchio): salviamo solo se c'è
+      // per non lasciare in sessione un valore vuoto.
+      if (newRole) await SecureStore.setItemAsync(SESSION_ROLE_KEY, newRole);
+      else await SecureStore.deleteItemAsync(SESSION_ROLE_KEY);
     } catch (e) {
       console.warn("Impossibile salvare la sessione:", e);
     }
     setToken(newToken);
     setDeviceId(newDeviceId);
+    setRole(newRole ?? null);
   };
 
   const handleLogout = async () => {
     try {
       await SecureStore.deleteItemAsync(SESSION_TOKEN_KEY);
       await SecureStore.deleteItemAsync(SESSION_DEVICE_KEY);
+      await SecureStore.deleteItemAsync(SESSION_ROLE_KEY);
     } catch (e) {
       console.warn("Errore durante il logout:", e);
     }
     setToken(null);
     setDeviceId(null);
+    setRole(null);
   };
 
   if (showSplash) {
@@ -72,6 +86,7 @@ export default function App() {
         <MonitorScreen
           token={token}
           deviceId={deviceId}
+          role={role}
           onLogout={handleLogout}
         />
       </SafeAreaProvider>

@@ -24,12 +24,14 @@ export const PATIENT_INFO_KEY = "alvea_patient_info";
 export const GRAFANA_URL =
   "http://192.168.1.50:3000/d/alvea-monitor/alvea-monitoraggio-paziente?orgId=1&kiosk";
 
-// Alcuni progetti distinguono un ruolo "medico" da uno "paziente" (Punto 4
-// dei requisiti). In DEMO_MODE, senza un vero backend che restituisca il
-// ruolo dell'utente autenticato, questo flag decide se mostrare la voce
-// "Dashboard Grafana" in MonitorScreen. Con backend reale, sostituire con
-// il ruolo ricevuto da loginUser() (es. { access_token, device_id, role }).
-export const SHOW_GRAFANA_TAB = true;
+// Distinzione ruolo medico/genitore (Punto 4 dei requisiti). Con backend reale
+// l'app mostra le funzionalità riservate al medico (dashboard Grafana e
+// configurazione del device) SOLO se il login restituisce role === "medico"
+// (vedi Token in schemas.py e la gestione del ruolo in App.js/MonitorScreen).
+// Questo flag è un semplice override di sviluppo: se true, forza la visibilità
+// di quelle voci anche senza ruolo medico (comodo per i test). In uso reale
+// va lasciato false, così il genitore non vede la dashboard del medico.
+export const SHOW_GRAFANA_TAB = false;
 
 // --- Notifiche push (Punto 7 dei requisiti: gestione alert) ---
 // Endpoint del backend che riceve l'Expo Push Token del dispositivo e che

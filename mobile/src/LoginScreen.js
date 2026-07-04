@@ -93,9 +93,9 @@ export default function LoginScreen({ onLogin }) {
       return Alert.alert("Attenzione", "Inserisci username e password");
     setBusy(true);
     try {
-      // Il backend restituisce { access_token, device_id } legato all'utente
-      const { access_token, device_id } = await loginUser(username, password);
-      onLogin(access_token, device_id);
+      // Il backend restituisce { access_token, device_id, role } dell'utente
+      const { access_token, device_id, role } = await loginUser(username, password);
+      onLogin(access_token, device_id, role);
     } catch (e) {
       // Errore reale mostrato all'utente — nessun fallback con token finto
       Alert.alert("Accesso negato", e.message || "Credenziali non valide.");

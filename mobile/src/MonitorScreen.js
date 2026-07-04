@@ -118,7 +118,14 @@ function formatDeviceStatus(status) {
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30000;
 
-export default function MonitorScreen({ token, deviceId, onLogout }) {
+export default function MonitorScreen({ token, deviceId, role, onLogout }) {
+  // Distinzione lato genitore / lato medico (Punto 4 dei requisiti): le
+  // funzionalità riservate al medico (dashboard Grafana e configurazione del
+  // device) vengono mostrate solo se l'utente ha effettuato l'accesso come
+  // medico. SHOW_GRAFANA_TAB resta un override di sviluppo (vedi config.js).
+  const isMedico = role === "medico";
+  const showMedicoTools = isMedico || SHOW_GRAFANA_TAB;
+
   const [reading, setReading] = useState(null);
   const [alerts, setAlerts] = useState([]);
   const [history, setHistory] = useState([]);
@@ -136,9 +143,8 @@ export default function MonitorScreen({ token, deviceId, onLogout }) {
 
   // Modal di configurazione (Punto 8 dei requisiti: "Il medico deve poter
   // configurare almeno alcuni parametri del sistema", es. "frequenza di
-  // campionamento o invio dati"). Finche' l'app non distingue un vero
-  // ruolo medico (vedi nota su SHOW_GRAFANA_TAB in config.js), questa
-  // azione resta dietro lo stesso flag usato per la dashboard Grafana.
+  // campionamento o invio dati"). L'azione è riservata al medico: il pulsante
+  // che apre questa modale è mostrato solo quando showMedicoTools è vero.
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [publishPeriodInput, setPublishPeriodInput] = useState("");
   const [sendingCommand, setSendingCommand] = useState(false);
@@ -376,7 +382,7 @@ export default function MonitorScreen({ token, deviceId, onLogout }) {
         <View style={styles.headerRow}>
           <Text style={styles.header}>Alvea</Text>
           <View style={{ flexDirection: "row", alignItems: "center" }}>
-            {SHOW_GRAFANA_TAB && (
+            {showMedicoTools && (
               <TouchableOpacity
                 onPress={() => setShowConfigModal(true)}
                 activeOpacity={0.7}
@@ -385,7 +391,7 @@ export default function MonitorScreen({ token, deviceId, onLogout }) {
                 <Text style={[styles.logoutText, { fontSize: 22 }]}>⚙️</Text>
               </TouchableOpacity>
             )}
-            {SHOW_GRAFANA_TAB && (
+            {showMedicoTools && (
               <TouchableOpacity
                 onPress={() => setShowGrafana(true)}
                 activeOpacity={0.7}
