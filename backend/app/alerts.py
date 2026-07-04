@@ -37,7 +37,7 @@ def evaluate(reading: dict, thresholds: dict | None = None) -> list[dict]:
 
     # --- Controllo contatto fascia (antipanico) ----------------------------
     # Se la fascia è staccata i valori fisiologici sono 0 (azzerati dal firmware).
-    # Viene emsso solo l'allarme tecnico e interrotta la valutazione clinica.
+    # Viene emesso solo l'allarme tecnico e interrotta la valutazione clinica.
     if not contact:
         alerts.append(_a(
             parameter="contact",
