@@ -65,7 +65,7 @@ flowchart LR
     RR --> BPM([BPM])
     RR --> EDR["EDR · IIR passa-basso<br/>(Aritmia Sinusale Respiratoria)"] --> FR([Freq. respiratoria])
     NTC["Termistore NTC<br/>ADC · GPIO35"] --> LIN["Linearizzazione"] --> T([Temp. cutanea])
-    BAT["Partitore resistivo<br/>ADC · GPIO25"] --> PCT([Batteria %])
+    BAT["Partitore resistivo<br/>ADC · GPIO36"] --> PCT([Batteria %])
     BPM --> PAY["Payload JSON · 1 Hz"]
     FR --> PAY
     T --> PAY
@@ -176,7 +176,7 @@ I grafici storici e gli alert si popolano in tempo reale su Grafana e sull'app.
 | Hardware reale via BLE | `main_real_ble.py` |
 
 **Cablaggio sensori reali:** ECG (AD8232) `OUTPUT→GPIO34, LO+→GPIO32, LO-→GPIO33` ·
-termistore NTC `partitore→GPIO35 (ADC)` · batteria `partitore→GPIO25 (ADC)`.
+termistore NTC `partitore→GPIO35 (ADC)` · batteria `partitore→GPIO36 (ADC)`.
 
 > Il **BPM** è calcolato con **Pan-Tompkins** sull'ECG; la **frequenza respiratoria**
 > è ricavata dagli *stessi* intervalli RR via **EDR** (filtro IIR sull'Aritmia Sinusale

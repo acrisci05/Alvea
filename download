@@ -1,0 +1,42 @@
+# Segreti / credenziali (mai visibili nel repository)
+firmware/secrets.py
+docker-stack/.env
+**/secrets.py
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+
+# Database locali
+*.db
+*.sqlite3
+
+# Dati runtime dei container (montati, non versionati)
+docker-stack/mosquitto/data/*
+docker-stack/mosquitto/log/*
+docker-stack/influxdb/*
+docker-stack/nodered/data/*
+!**/.gitkeep
+!docker-stack/nodered/data/flows.json
+
+# Node / Expo
+node_modules/
+.expo/
+dist/
+web-build/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# LaTeX (file ausiliari di compilazione; teniamo .tex e .pdf)
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
