@@ -107,7 +107,15 @@ function toDate(timestamp) {
     // un formato che alcuni motori JS (Hermes su React Native) non riescono a
     // interpretare e che darebbe "Invalid date". Lo normalizziamo in ISO con
     // millisecondi a 3 cifre; le stringhe già ISO restano invariate.
-    const iso = timestamp.replace(" ", "T").replace(/(\.\d{3})\d+$/, "$1");
+    let iso = timestamp.replace(" ", "T").replace(/(\.\d{3})\d+$/, "$1");
+    // Le datetime del backend sono in UTC (datetime.utcnow) ma arrivano SENZA
+    // indicatore di fuso (né "Z" né "+02:00"). Senza di esso new Date() le
+    // interpreta come ora LOCALE, mostrando l'orario sfasato (es. -2h in Italia
+    // d'estate). Se il fuso manca lo forziamo a UTC aggiungendo "Z": così
+    // toLocaleTimeString/toLocaleString le riconverte all'ora locale del telefono.
+    if (!/[zZ]$|[+-]\d{2}:?\d{2}$/.test(iso)) {
+      iso += "Z";
+    }
     return new Date(iso);
   }
   return new Date(timestamp);
