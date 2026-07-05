@@ -271,12 +271,34 @@ async def get_threshold_row(db: AsyncSession, device_id: str):
 
 async def get_thresholds(db: AsyncSession, device_id: str) -> dict:
     """Soglie effettive per un device: configurazione dedicata se presente,
-    altrimenti i default di config.
+    altrimenti seleziona dinamicamente i default di Fleming in base all'età del paziente.
     """
+    # 1. Controlla se il medico ha impostato delle soglie custom
     row = await get_threshold_row(db, device_id)
-    if row is None:
-        return dict(config.DEFAULT_THRESHOLDS)
-    return {f: getattr(row, f) for f in _THRESHOLD_FIELDS}
+    if row is not None:
+        return {f: getattr(row, f) for f in _THRESHOLD_FIELDS}
+
+    # 2. Altrimenti, recupera la data di nascita e usa le fasce di Fleming
+    patient = await get_patient_record(db, device_id)
+    if patient and patient.birth_date:
+        try:
+            birth_date = datetime.strptime(patient.birth_date, "%Y-%m-%d")
+            now = datetime.utcnow()
+            months = (now.year - birth_date.year) * 12 + now.month - birth_date.month
+            
+            if 0 <= months <= 3:
+                return dict(config.FLEMING_THRESHOLDS["0-3m"])
+            elif 3 < months <= 6:
+                return dict(config.FLEMING_THRESHOLDS["3-6m"])
+            elif 6 < months <= 9:
+                return dict(config.FLEMING_THRESHOLDS["6-9m"])
+            elif 9 < months <= 12:
+                return dict(config.FLEMING_THRESHOLDS["9-12m"])
+        except ValueError:
+            pass # In caso di formato data non valido, procedi al fallback
+
+    # 3. Fallback di sicurezza (paziente senza data di nascita o > 12 mesi)
+    return dict(config.FLEMING_THRESHOLDS["fallback"])
 
 async def upsert_thresholds(db: AsyncSession, device_id: str, data: dict, username: str):
     """Crea o aggiorna le soglie del device e registra l'autore della modifica."""
