@@ -38,20 +38,20 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "blue",
+                "color": "red",
                 "value": null
               },
               {
-                "color": "green",
-                "value": 20
+                "color": "orange",
+                "value": 12
               },
               {
-                "color": "orange",
-                "value": 31
+                "color": "green",
+                "value": 14
               },
               {
                 "color": "red",
-                "value": 41
+                "value": 40
               }
             ]
           }
@@ -102,20 +102,24 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "blue",
+                "color": "red",
                 "value": null
               },
               {
+                "color": "orange",
+                "value": 44
+              },
+              {
                 "color": "green",
-                "value": 90
+                "value": 50
               },
               {
                 "color": "orange",
-                "value": 111
+                "value": 171
               },
               {
                 "color": "red",
-                "value": 131
+                "value": 181
               }
             ]
           }
@@ -148,7 +152,7 @@
     {
       "id": 4,
       "type": "stat",
-      "title": "Temp Cutanea (C°)",
+      "title": "Temp Cutanea (°C)",
       "datasource": {
         "type": "influxdb",
         "uid": "alvea_influx"
@@ -166,20 +170,24 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "blue",
+                "color": "red",
                 "value": null
               },
               {
+                "color": "orange",
+                "value": 35.0
+              },
+              {
                 "color": "green",
-                "value": 31.0
+                "value": 36.0
               },
               {
                 "color": "orange",
-                "value": 34.5
+                "value": 37.3
               },
               {
                 "color": "red",
-                "value": 35.5
+                "value": 38.5
               }
             ]
           }
@@ -364,20 +372,20 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "blue",
+                "color": "red",
                 "value": null
               },
               {
-                "color": "green",
-                "value": 20
+                "color": "orange",
+                "value": 12
               },
               {
-                "color": "orange",
-                "value": 31
+                "color": "green",
+                "value": 14
               },
               {
                 "color": "red",
-                "value": 41
+                "value": 40
               }
             ]
           }
@@ -432,20 +440,24 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "blue",
+                "color": "red",
                 "value": null
               },
               {
+                "color": "orange",
+                "value": 44
+              },
+              {
                 "color": "green",
-                "value": 90
+                "value": 50
               },
               {
                 "color": "orange",
-                "value": 111
+                "value": 171
               },
               {
                 "color": "red",
-                "value": 131
+                "value": 181
               }
             ]
           }
@@ -475,7 +487,7 @@
     {
       "id": 10,
       "type": "timeseries",
-      "title": "Storico Temp Cutanea (C°)",
+      "title": "Storico Temp Cutanea (°C)",
       "datasource": {
         "type": "influxdb",
         "uid": "alvea_influx"
@@ -500,20 +512,24 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "blue",
+                "color": "red",
                 "value": null
               },
               {
+                "color": "orange",
+                "value": 35.0
+              },
+              {
                 "color": "green",
-                "value": 31.0
+                "value": 36.0
               },
               {
                 "color": "orange",
-                "value": 34.5
+                "value": 37.3
               },
               {
                 "color": "red",
-                "value": 35.5
+                "value": 38.5
               }
             ]
           }
@@ -637,8 +653,136 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "### Scheda clinica essenziale - Asma pediatrico\n\n**Dispositivo / Paziente:** selezionabili dai filtri in alto (*Dispositivo*, *Paziente*).\n\n**Parametri monitorati e soglie** (default, configurabili dal medico):\n\n| Parametro | Nominale | Warning | Critico |\n|---|---|---|---|\n| Freq. Respiratoria | 14-30 atti/min | <14 / >30 | <=10 / >=40 (tachipnea) |\n| Freq. Cardiaca | 70-130 BPM | <70 / >130 | <=60 / >=150 |\n| Temp. cutanea (caviglia) | 31-34 C | <30.5 / >35 | <=29 / >=36 |\n\n**Alert autonomo del dispositivo:** tachipnea (FR oltre soglia critica) e batteria scarica (<15%).\n\n**Anamnesi completa** (patologie, allergie, terapie): gestita dal medico nell'app/back-end (scheda paziente)."
+        "content": "### Scheda clinica essenziale - Asma pediatrico\n\n**Dispositivo / Paziente:** selezionabili dai filtri in alto (*Dispositivo*, *Paziente*).\n\n**Parametri monitorati e soglie** (banda di fallback eta'-indipendente valutata dal gateway; le soglie del singolo paziente sono impostate dal pediatra):\n\n| Parametro | Nominale | Warning | Critico |\n|---|---|---|---|\n| Freq. Respiratoria | 14-40 atti/min | <14 | <=11 / >=40 (tachipnea) |\n| Freq. Cardiaca | 50-170 BPM | <50 / >170 | <=43 / >=181 |\n| Temp. cutanea (caviglia) | 36.0-37.2 °C | <36.0 / >37.2 | <=35.0 / >=38.5 |\n\n**Alert autonomo del dispositivo:** tachipnea con frequenza respiratoria >40 atti/min e batteria scarica (<15%).\n\n**Anamnesi completa** (patologie, allergie, terapie): gestita dal medico nell'app/back-end (scheda paziente).\n"
       }
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "Livello Batteria (%)",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "alvea_influx"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 20
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 15
+              },
+              {
+                "color": "green",
+                "value": 30
+              }
+            ]
+          },
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "area",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "alvea_influx"
+          },
+          "query": "from(bucket: \"vitals\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => not exists r[\"device_id\"] or r[\"device_id\"] =~ /${device:regex}/)\n  |> filter(fn: (r) => not exists r[\"patient_id\"] or r[\"patient_id\"] =~ /${patient:regex}/)\n  |> filter(fn: (r) => r._measurement == \"vitals\" and r._field == \"battery_pct\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Storico Livello Batteria (%)",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "alvea_influx"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 18,
+        "x": 6,
+        "y": 20
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": true,
+            "showPoints": "never"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 15
+              },
+              {
+                "color": "green",
+                "value": 30
+              }
+            ]
+          },
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "alvea_influx"
+          },
+          "query": "from(bucket: \"vitals\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => not exists r[\"device_id\"] or r[\"device_id\"] =~ /${device:regex}/)\n  |> filter(fn: (r) => not exists r[\"patient_id\"] or r[\"patient_id\"] =~ /${patient:regex}/)\n  |> filter(fn: (r) => r._measurement == \"vitals\" and r._field == \"battery_pct\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "refId": "A"
+        }
+      ]
     }
   ],
   "templating": {
