@@ -110,7 +110,7 @@ async def _handle_message(payload_str: str):
 
         # STEP 4: valuta le soglie cliniche sulla lettura appena ricevuta.
         # Usa le soglie configurate dal medico per questo device (se presenti),
-        # altrimenti i default globali (config.DEFAULT_THRESHOLDS).
+        # altrimenti calcola le soglie dinamiche basate sulle fasce di Fleming.
         thresholds = await crud.get_thresholds(db, reading["device_id"])
         fired = alerts.evaluate(reading, thresholds)
 
