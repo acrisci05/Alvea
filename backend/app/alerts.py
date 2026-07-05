@@ -9,11 +9,11 @@
 #   - Frequenza cardiaca BPM  → soglie bpm_*
 #   - Temperatura cutanea     → soglie temp_*
 #
-# Le soglie arrivano come dizionario (chiavi di config.DEFAULT_THRESHOLDS): di
-# default sono quelle globali, ma il medico può configurarne di dedicate per
-# device (DeviceThreshold).
-from . import config
+# Le soglie arrivano come dizionario: di default sono quelle dinamiche 
+# basate sull'età di Fleming (config.FLEMING_THRESHOLDS), ma il medico può 
+# configurarne di dedicate per device (DeviceThreshold).
 
+from . import config
 
 def evaluate(reading: dict, thresholds: dict | None = None) -> list[dict]:
     """Valuta le soglie su una lettura e restituisce la lista di alert generati.
@@ -23,7 +23,7 @@ def evaluate(reading: dict, thresholds: dict | None = None) -> list[dict]:
     reading : dict
         Dizionario con i campi del payload firmware (es. bpm, respiration_rate).
     thresholds : dict | None
-        Soglie cliniche da applicare. Se None, usa config.DEFAULT_THRESHOLDS.
+        Soglie cliniche da applicare. Se None, usa il fallback di config.FLEMING_THRESHOLDS.
 
     Ritorna
     -------
@@ -31,7 +31,8 @@ def evaluate(reading: dict, thresholds: dict | None = None) -> list[dict]:
         Lista di alert, ognuno con le chiavi: parameter, kind, severity,
         message, value. Lista vuota se tutti i parametri sono nella norma.
     """
-    th = thresholds or config.DEFAULT_THRESHOLDS
+    # Usa le soglie passate (gia' filtrate per età nel CRUD) o il fallback generale
+    th = thresholds or config.FLEMING_THRESHOLDS["fallback"]
     alerts = []
     contact = reading.get("sensor_contact", True)
 
@@ -97,7 +98,6 @@ def evaluate(reading: dict, thresholds: dict | None = None) -> list[dict]:
                              f"Temperatura alta: {temp} °C", temp))
 
     return alerts
-
 
 def _a(parameter: str, kind: str, severity: str, message: str, value) -> dict:
     """Helper interno: costruisce un dizionario alert."""
