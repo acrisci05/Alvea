@@ -1,43 +1,23 @@
 # config.py - Configurazione backend via variabili d'ambiente (12-factor).
-# Tutte le costanti vengono lette da variabili d'ambiente al momento
-# dell'avvio del container; se la variabile non è impostata si usa il valore di default
 import os
 
 # --- Database ---
-# SQLite asincrono in locale.
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./alvea.db")
 
 # --- Auth ---
-# Chiave segreta usata per firmare i token JWT.
 SECRET_KEY = os.getenv("SECRET_KEY", "CAMBIAMI_IN_PRODUZIONE")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 
 # --- CORS ---
-# Origini autorizzate a chiamare l'API (app mobile Expo / dashboard web).
-# Lista separata da virgole; "*" (default sviluppo) abilita tutte le origini.
 CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()]
 
 # --- MQTT ---
-MQTT_HOST = os.getenv("MQTT_HOST", "mosquitto")   # nome del container broker
+MQTT_HOST = os.getenv("MQTT_HOST", "mosquitto")
 MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
-
-# Il firmware pubblica la telemetria su:
-#   alvea/devices/<device_id>/telemetry
-# Il device_id viene estratto dal topic nel momento in cui arriva il messaggio.
 TOPIC_DATA = os.getenv("TOPIC_DATA", "alvea/devices/+/telemetry")
-
-# Il firmware pubblica allarmi hardware sul topic_alert separato
-# (batteria scarica, guasto sensore persistente).
 TOPIC_ALERT = os.getenv("TOPIC_ALERT", "alvea/devices/+/alerts")
-
-# Il backend pubblica comandi verso il firmware sul topic_cmd_template.
-# Sostituire <device_id> con l'id reale prima di pubblicare.
 TOPIC_CMD_TEMPLATE = "alvea/devices/{device_id}/commands"
-
-# Dispositivo predefinito a cui viene auto-assegnato il paziente al momento
-# della registrazione (deve coincidere con DEVICE_ID nel firmware ESP32,
-# config.py lato firmware: "ALVEA_04").
 DEFAULT_DEVICE_ID = os.getenv("DEFAULT_DEVICE_ID", "ALVEA_04")
 
 # --- InfluxDB (serie temporali, opzionale) ---
@@ -45,46 +25,41 @@ INFLUX_URL     = os.getenv("INFLUX_URL",    "http://influxdb:8086")
 INFLUX_TOKEN   = os.getenv("INFLUX_TOKEN",  "")
 INFLUX_ORG     = os.getenv("INFLUX_ORG",    "alvea")
 INFLUX_BUCKET  = os.getenv("INFLUX_BUCKET", "vitals")
-# Disabilitato di default; abilitare con INFLUX_ENABLED=true nel .env
 INFLUX_ENABLED = os.getenv("INFLUX_ENABLED", "false").lower() == "true"
 
-# --- Soglie cliniche ---
-# Il dispositivo ha un unico sensore biomedicale (ECG AD8232): da esso si
-# ricavano il battito (BPM) e, tramite EDR, la frequenza respiratoria. La temperatura cutanea arriva dal termistore NTC.
-# Frequenza respiratoria (atti/min)
-RESP_WARN_LOW  = 14     # warning se FR < 14
-RESP_WARN_HIGH = 30     # warning se FR > 30
-RESP_CRIT_LOW  = 10     # critico se FR <= 10  (apnea/bradipnea)
-RESP_CRIT_HIGH = 40     # critico se FR >= 40  (tachipnea severa, crisi asmatica)
+# --- Soglie cliniche (Fasce di Fleming) ---
+# Implementazione del range 1°-99° centile in base all'età (mesi).
+# I valori limite della tabella costituiscono le soglie critiche. Le soglie 
+# di warning sono state ricavate stringendo l'intervallo per l'allerta precoce.
+# La temperatura cutanea è fissata a 36.0-37.2°C per la normalità.
 
-# Frequenza cardiaca (BPM)
-BPM_WARN_LOW   = 70     # warning se BPM < 70
-BPM_WARN_HIGH  = 130    # warning se BPM > 130
-BPM_CRIT_LOW   = 60     # critico se BPM <= 60  (bradicardia)
-BPM_CRIT_HIGH  = 150    # critico se BPM >= 150 (tachicardia severa)
-
-# Temperatura cutanea (°C)
-TEMP_WARN_LOW  = 36.0   # warning se temp < 36.0
-TEMP_WARN_HIGH = 37.2   # warning se temp > 37.2
-TEMP_CRIT_LOW  = 35.0   # critico se temp <= 35.0 (ipotermia)
-TEMP_CRIT_HIGH = 38.5   # critico se temp >= 38.5 (febbre alta)
-
-# Secondi consecutivi di sensor_contact=False prima di emettere
-# l'allarme tecnico "fascia staccata" (debounce antipanico).
-CONTACT_LOST_DEBOUNCE_S = 5
-
-# Soglie di default per-device: usate quando il medico non ha configurato soglie dedicate per uno specifico dispositivo
-DEFAULT_THRESHOLDS = {
-    "resp_warn_low":  RESP_WARN_LOW,
-    "resp_warn_high": RESP_WARN_HIGH,
-    "resp_crit_low":  RESP_CRIT_LOW,
-    "resp_crit_high": RESP_CRIT_HIGH,
-    "bpm_warn_low":   BPM_WARN_LOW,
-    "bpm_warn_high":  BPM_WARN_HIGH,
-    "bpm_crit_low":   BPM_CRIT_LOW,
-    "bpm_crit_high":  BPM_CRIT_HIGH,
-    "temp_warn_low":  TEMP_WARN_LOW,
-    "temp_warn_high": TEMP_WARN_HIGH,
-    "temp_crit_low":  TEMP_CRIT_LOW,
-    "temp_crit_high": TEMP_CRIT_HIGH,
+FLEMING_THRESHOLDS = {
+    "0-3m": {
+        "resp_warn_low": 28, "resp_warn_high": 60, "resp_crit_low": 25, "resp_crit_high": 66,
+        "bpm_warn_low": 100, "bpm_warn_high": 170, "bpm_crit_low": 90,  "bpm_crit_high": 181,
+        "temp_warn_low": 36.0, "temp_warn_high": 37.2, "temp_crit_low": 35.0, "temp_crit_high": 38.5,
+    },
+    "3-6m": {
+        "resp_warn_low": 27, "resp_warn_high": 58, "resp_crit_low": 24, "resp_crit_high": 64,
+        "bpm_warn_low": 110, "bpm_warn_high": 165, "bpm_crit_low": 104, "bpm_crit_high": 175,
+        "temp_warn_low": 36.0, "temp_warn_high": 37.2, "temp_crit_low": 35.0, "temp_crit_high": 38.5,
+    },
+    "6-9m": {
+        "resp_warn_low": 26, "resp_warn_high": 55, "resp_crit_low": 23, "resp_crit_high": 61,
+        "bpm_warn_low": 105, "bpm_warn_high": 160, "bpm_crit_low": 98,  "bpm_crit_high": 168,
+        "temp_warn_low": 36.0, "temp_warn_high": 37.2, "temp_crit_low": 35.0, "temp_crit_high": 38.5,
+    },
+    "9-12m": {
+        "resp_warn_low": 25, "resp_warn_high": 52, "resp_crit_low": 22, "resp_crit_high": 58,
+        "bpm_warn_low": 100, "bpm_warn_high": 150, "bpm_crit_low": 93,  "bpm_crit_high": 161,
+        "temp_warn_low": 36.0, "temp_warn_high": 37.2, "temp_crit_low": 35.0, "temp_crit_high": 38.5,
+    },
+    "fallback": {
+        # Banda di tolleranza di massima ampiezza (es. pazienti > 1 anno o età non specificata)
+        "resp_warn_low": 14, "resp_warn_high": 60, "resp_crit_low": 11, "resp_crit_high": 66,
+        "bpm_warn_low": 50,  "bpm_warn_high": 170, "bpm_crit_low": 43,  "bpm_crit_high": 181,
+        "temp_warn_low": 36.0, "temp_warn_high": 37.2, "temp_crit_low": 35.0, "temp_crit_high": 38.5,
+    }
 }
+
+CONTACT_LOST_DEBOUNCE_S = 5
