@@ -7,72 +7,89 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  View,
 } from "react-native";
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as SecureStore from "expo-secure-store";
-import { loginUser, registerUser } from "./api"; // Nomi corretti delle funzioni
-import { PATIENT_INFO_KEY } from "./config";
-import styles from "./style";
+import { loginUser, registerUser } from "./api";
+import { patientInfoKeyFor } from "./config";
+import styles, { colors } from "./style";
 
+
+// Limiti dell'età
+const MAX_YEARS = 18;
+const MAX_MONTHS = 11;
+
+// Testo sintetico dell'età (es. "3 anni e 4 mesi").
+function ageLabel(years, months) {
+  const y = `${years} ${years === 1 ? "anno" : "anni"}`;
+  const m = `${months} ${months === 1 ? "mese" : "mesi"}`;
+  if (years === 0) return m;
+  if (months === 0) return y;
+  return `${y} e ${m}`;
+}
 
 export default function LoginScreen({ onLogin }) {
-  // "login" mostra solo username/password. "register" mostra anche i dati
-  // anagrafici minimi del paziente (Punto 9 dei requisiti: scheda paziente
-  // - dati anagrafici), che vengono salvati insieme a username/password.
+  // "login" mostra solo username/password. "register" mostra anche i dati anagrafici minimi del paziente.
   const [mode, setMode] = useState("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [patientName, setPatientName] = useState("");
-  const [ageYears, setAgeYears] = useState("");
-  const [ageMonths, setAgeMonths] = useState("");
+  const [ageYears, setAgeYears] = useState(0);
+  const [ageMonths, setAgeMonths] = useState(0);
+  const [sex, setSex] = useState("");      // "M" | "F"
   const [busy, setBusy] = useState(false);
 
   const isRegisterMode = mode === "register";
 
-  // Passa alla schermata di registrazione, ripulendo eventuali residui
-  // della sessione di login precedente (la password non va mai riusata
-  // tra le due modalità senza che l'utente la riscriva).
+  // Passa alla schermata di registrazione, ripulendo eventuali residui della sessione di login precedente.
   function goToRegister() {
     setPassword("");
+    setConfirmPassword("");
     setMode("register");
   }
 
   function goToLogin() {
     setPassword("");
+    setConfirmPassword("");
     setMode("login");
+  }
+
+  // Incremento/decremento con limiti, usati dai due stepper.
+  function changeYears(delta) {
+    setAgeYears((v) => Math.min(MAX_YEARS, Math.max(0, v + delta)));
+  }
+  function changeMonths(delta) {
+    setAgeMonths((v) => Math.min(MAX_MONTHS, Math.max(0, v + delta)));
   }
 
   async function handleRegister() {
     if (!username || !password)
       return Alert.alert("Attenzione", "Inserisci username e password");
+    if (password.length < 6)
+      return Alert.alert("Attenzione", "La password deve avere almeno 6 caratteri");
+    if (password !== confirmPassword)
+      return Alert.alert("Attenzione", "Le due password non coincidono");
     if (!patientName.trim())
       return Alert.alert("Attenzione", "Inserisci il nome del paziente");
-
-    const yearsNum = ageYears === "" ? 0 : parseInt(ageYears, 10);
-    const monthsNum = ageMonths === "" ? 0 : parseInt(ageMonths, 10);
-    if (
-      Number.isNaN(yearsNum) || Number.isNaN(monthsNum) ||
-      yearsNum < 0 || monthsNum < 0 || monthsNum > 11
-    ) {
-      return Alert.alert(
-        "Attenzione",
-        "Età non valida: usa anni interi (≥ 0) e mesi tra 0 e 11"
-      );
-    }
+    if (!sex)
+      return Alert.alert("Attenzione", "Seleziona il sesso del bambino");
 
     setBusy(true);
     try {
       const patientInfo = {
         patient_name: patientName.trim(),
-        age_years: yearsNum,
-        age_months: monthsNum,
+        sex,                      // "M" | "F"
+        age_years: ageYears,
+        age_months: ageMonths,
       };
       await registerUser(username, password, patientInfo);
-      // Persistiamo i dati anagrafici localmente: in DEMO_MODE non esiste
-      // un vero backend che li conservi, e anche con un backend reale è
-      // utile per mostrarli subito in MonitorScreen senza un'altra chiamata.
       try {
-        await SecureStore.setItemAsync(PATIENT_INFO_KEY, JSON.stringify(patientInfo));
+        await SecureStore.setItemAsync(
+          patientInfoKeyFor(username),
+          JSON.stringify(patientInfo)
+        );
       } catch (storageError) {
         console.warn("Impossibile salvare i dati anagrafici:", storageError);
       }
@@ -93,11 +110,21 @@ export default function LoginScreen({ onLogin }) {
       return Alert.alert("Attenzione", "Inserisci username e password");
     setBusy(true);
     try {
-      // Il backend restituisce { access_token, device_id, role } dell'utente
-      const { access_token, device_id, role } = await loginUser(username, password);
-      onLogin(access_token, device_id, role);
+      const { access_token, device_id, username: loggedUser, patientInfo: loggedPatient } =
+        await loginUser(username, password);
+      const finalUser = loggedUser || username;
+      if (loggedPatient) {
+        try {
+          const key = patientInfoKeyFor(finalUser);
+          const existing = await SecureStore.getItemAsync(key);
+          if (!existing)
+            await SecureStore.setItemAsync(key, JSON.stringify(loggedPatient));
+        } catch (storageError) {
+          console.warn("Impossibile salvare i dati anagrafici:", storageError);
+        }
+      }
+      onLogin(access_token, device_id, finalUser);
     } catch (e) {
-      // Errore reale mostrato all'utente — nessun fallback con token finto
       Alert.alert("Accesso negato", e.message || "Credenziali non valide.");
     } finally {
       setBusy(false);
@@ -106,12 +133,12 @@ export default function LoginScreen({ onLogin }) {
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1 }}
+      style={styles.flexFill}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <SafeAreaView style={styles.containerCenter}>
         <ScrollView
-          contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}
+          contentContainerStyle={styles.loginScrollContent}
           keyboardShouldPersistTaps="handled"
         >
           <Text style={styles.logo}>Alvea</Text>
@@ -123,9 +150,9 @@ export default function LoginScreen({ onLogin }) {
 
           <TextInput
             style={styles.input}
-            placeholder="Username"
+            placeholder="Username genitore"
             autoCapitalize="none"
-            placeholderTextColor="#A0AAB2"
+            placeholderTextColor={colors.placeholder}
             value={username}
             onChangeText={setUsername}
           />
@@ -133,7 +160,7 @@ export default function LoginScreen({ onLogin }) {
             style={styles.input}
             placeholder="Password"
             secureTextEntry
-            placeholderTextColor="#A0AAB2"
+            placeholderTextColor={colors.placeholder}
             value={password}
             onChangeText={setPassword}
           />
@@ -143,27 +170,90 @@ export default function LoginScreen({ onLogin }) {
             <>
               <TextInput
                 style={styles.input}
+                placeholder="Conferma password"
+                secureTextEntry
+                placeholderTextColor={colors.placeholder}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+              />
+
+              <TextInput
+                style={styles.input}
                 placeholder="Nome del paziente"
-                placeholderTextColor="#A0AAB2"
+                placeholderTextColor={colors.placeholder}
                 value={patientName}
                 onChangeText={setPatientName}
               />
-              <TextInput
-                style={styles.input}
-                placeholder="Età — anni"
-                placeholderTextColor="#A0AAB2"
-                keyboardType="number-pad"
-                value={ageYears}
-                onChangeText={setAgeYears}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Età — mesi (0-11)"
-                placeholderTextColor="#A0AAB2"
-                keyboardType="number-pad"
-                value={ageMonths}
-                onChangeText={setAgeMonths}
-              />
+
+              {/* --- Età (anni e mesi) --- */}
+              <Text style={styles.fieldLabel}>Età del bambino</Text>
+
+              <View style={styles.stepperRow}>
+                <Text style={styles.stepperLabel}>Anni</Text>
+                <View style={styles.stepper}>
+                  <TouchableOpacity
+                    style={[styles.stepBtn, ageYears === 0 && styles.stepBtnDisabled]}
+                    onPress={() => changeYears(-1)}
+                    disabled={ageYears === 0}
+                  >
+                    <Text style={styles.stepBtnText}>-</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.stepValue}>{ageYears}</Text>
+                  <TouchableOpacity
+                    style={[styles.stepBtn, ageYears === MAX_YEARS && styles.stepBtnDisabled]}
+                    onPress={() => changeYears(1)}
+                    disabled={ageYears === MAX_YEARS}
+                  >
+                    <Text style={styles.stepBtnText}>+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.stepperRow}>
+                <Text style={styles.stepperLabel}>Mesi</Text>
+                <View style={styles.stepper}>
+                  <TouchableOpacity
+                    style={[styles.stepBtn, ageMonths === 0 && styles.stepBtnDisabled]}
+                    onPress={() => changeMonths(-1)}
+                    disabled={ageMonths === 0}
+                  >
+                    <Text style={styles.stepBtnText}>-</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.stepValue}>{ageMonths}</Text>
+                  <TouchableOpacity
+                    style={[styles.stepBtn, ageMonths === MAX_MONTHS && styles.stepBtnDisabled]}
+                    onPress={() => changeMonths(1)}
+                    disabled={ageMonths === MAX_MONTHS}
+                  >
+                    <Text style={styles.stepBtnText}>+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <Text style={styles.ageHint}>{ageLabel(ageYears, ageMonths)}</Text>
+
+              {/* --- Sesso: selettore a due opzioni --- */}
+              <Text style={styles.fieldLabel}>Sesso</Text>
+              <View style={styles.sexRow}>
+                <TouchableOpacity
+                  style={[styles.sexOption, sex === "M" && styles.sexOptionActive]}
+                  onPress={() => setSex("M")}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.sexOptionText, sex === "M" && styles.sexOptionTextActive]}>
+                    Maschio
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.sexOption, sex === "F" && styles.sexOptionActive]}
+                  onPress={() => setSex("F")}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.sexOptionText, sex === "F" && styles.sexOptionTextActive]}>
+                    Femmina
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </>
           )}
 
@@ -195,4 +285,3 @@ export default function LoginScreen({ onLogin }) {
     </KeyboardAvoidingView>
   );
 }
-

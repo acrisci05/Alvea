@@ -1,31 +1,24 @@
 import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
 
-
-// Configura il comportamento delle notifiche quando l'app è in foreground
+// Comportamento delle notifiche quando l'app è in primo piano (foreground).
+// A partire da Expo SDK 53 il campo `shouldShowAlert` è deprecato: al suo
+// posto vanno specificati `shouldShowBanner` (banner in alto) e
+// `shouldShowList` (comparsa nel centro notifiche). Vengono impostati
+// entrambi, così l'avviso resta visibile anche con l'applicazione aperta.
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
   }),
 });
 
-// Controlla se siamo su un dispositivo fisico (le notifiche push non funzionano
-// su simulatore/web — questo evita errori silenziosi durante la demo)
-function isPhysicalDevice() {
-  return Constants.isDevice === true;
-}
-
-// Richiede il permesso all'utente e restituisce lo stato finale
+// Richiede all'utente il permesso di ricevere notifiche e restituisce lo
+// stato finale: la stringa "granted" se il permesso è concesso, altrimenti
+// null.
 export async function registerForPushNotifications() {
-  if (!isPhysicalDevice()) {
-    console.warn(
-      "Le notifiche push funzionano solo su dispositivo fisico. " +
-      "Su simulatore o web le notifiche locali verranno comunque tentate."
-    );
-  }
-
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
 
@@ -42,17 +35,10 @@ export async function registerForPushNotifications() {
   return finalStatus;
 }
 
-// Invia una notifica locale immediata per un alert clinico.
-// Accetta sia lo schema gia' normalizzato da MonitorScreen (severity/message)
-// sia, in via defensive, lo schema originale del firmware (gravita/
-// descrizione: vedi alerts.py), così la funzione resta sicura anche se
-// richiamata altrove con un alert non ancora normalizzato.
-//
-// Il firmware invia anche alert con gravita "INFO" quando una condizione
-// precedentemente segnalata si risolve (vedi alerts.py: check_fault,
-// ramo "else"). Per questi non ha senso un titolo "EMERGENZA"/
-// "Attenzione": sarebbe fuorviante notificare come allarme la notizia
-// che un parametro e' rientrato nella norma.
+// Invia una notifica locale immediata per un alert clinico. Oltre alle
+// gravità "WARNING" e "CRITICAL", il firmware può emettere alert con gravità
+// "INFO" quando una condizione precedentemente segnalata rientra nella norma
+// (condizione risolta).
 export async function sendAlertNotification(alert) {
   const rawSeverity = alert.severity ?? alert.gravita ?? "attenzione";
   const normalizedSeverity = String(rawSeverity).toLowerCase();
@@ -68,7 +54,7 @@ export async function sendAlertNotification(alert) {
           ? "Aggiornamento — Alvea"
           : isCritical
           ? "EMERGENZA — Alvea"
-          : " Attenzione — Alvea",
+          : "Attenzione — Alvea",
         body,
         sound: !isInfo,
         priority: isCritical
@@ -80,44 +66,25 @@ export async function sendAlertNotification(alert) {
       trigger: null, // Notifica immediata
     });
   } catch (e) {
-    // Non blocchiamo l'app se la notifica fallisce (es. su web/simulatore)
+    // L'eventuale errore non deve interrompere l'esecuzione dell'app.
     console.warn("Invio notifica fallito:", e.message);
   }
 }
 
-// --- Push notifications reali (Expo Push Token + backend) ---
+// Registra sul backend il token push del dispositivo, così che gli alert
+// siano recapitati anche con l'app chiusa o in background. Il flusso è:
+//   1. genera un Expo Push Token legato al projectId EAS dell'applicazione;
+//   2. lo invia al backend, che lo utilizzerà per inviare notifiche push
+//      reali tramite il servizio Expo Push (a sua volta basato su FCM/APNs)
+//      quando rileva un alert critico sul paziente associato.
 //
-// Quanto sopra (sendAlertNotification) copre solo il caso "app aperta in
-// foreground": è una notifica locale, generata e mostrata dal telefono
-// stesso quando arriva un alert via WebSocket. Non funziona se l'app è in
-// background o chiusa.
-//
-// Per coprire anche quel caso (Punto 7 dei requisiti: alert visibili
-// anche fuori dall'app — vedi incontro_realtime_grafana.pdf, sezione
-// "Push Notifications / Fuori dall'App") seguiamo lo stesso pattern visto
-// nell'esempio dell'academy (app_con_notifica/codice_notify/app/App.js):
-// 1. richiediamo il permesso notifiche;
-// 2. generiamo un Expo Push Token legato al projectId EAS dell'app;
-// 3. lo inviamo al backend, che lo userà per inviare push reali tramite
-//    il servizio Expo Push (a sua volta basato su FCM/APNs) quando rileva
-//    un alert critico sul paziente associato.
-//
-// Questa funzione NON sostituisce registerForPushNotifications() sopra:
-// va chiamata in aggiunta, una volta che l'utente è autenticato (serve
-// token + deviceId per registrare il push token lato backend).
+// La generazione del token richiede un dispositivo fisico: su simulatore o su
+// web `getExpoPushTokenAsync` non è supportata e solleva un'eccezione. In quel
+// caso l'errore viene gestito senza interrompere l'app, che continua a
+// utilizzare le sole notifiche locali (attive quando è in primo piano).
 export async function registerExpoPushTokenOnBackend(token, deviceId) {
-  if (!isPhysicalDevice()) {
-    console.warn(
-      "Expo Push Token non generato: i push token reali richiedono un " +
-      "dispositivo fisico (su simulatore/web restano attive solo le " +
-      "notifiche locali)."
-    );
-    return null;
-  }
-
   try {
-    // Riusa expo-constants già importato in questo file (vedi import in
-    // testa al file) per leggere il projectId configurato in app.json.
+    // Il projectId EAS è necessario per generare un Expo Push Token.
     const projectId =
       Constants.expoConfig?.extra?.eas?.projectId ??
       Constants.easConfig?.projectId;
@@ -125,8 +92,7 @@ export async function registerExpoPushTokenOnBackend(token, deviceId) {
     if (!projectId) {
       console.warn(
         "projectId EAS non trovato in app.json (extra.eas.projectId): " +
-        "necessario per generare un Expo Push Token. Vedi app_con_notifica " +
-        "dell'academy per un esempio di configurazione."
+        "necessario per generare un Expo Push Token."
       );
       return null;
     }
@@ -137,16 +103,19 @@ export async function registerExpoPushTokenOnBackend(token, deviceId) {
 
     if (!expoPushToken) return null;
 
-    // Import "lazy" per evitare una dipendenza circolare tra api.js e
-    // Notifications.js (api.js non importa nulla da questo file).
+    // Import differito per evitare una dipendenza circolare tra api.js e
+    // Notifications.js.
     const { registerPushToken } = require("./api");
     await registerPushToken(token, deviceId, expoPushToken);
 
     return expoPushToken;
   } catch (e) {
-    // Non blocchiamo l'app: senza push token reale restano comunque
-    // attive le notifiche locali quando l'app è in foreground.
-    console.warn("Generazione/registrazione Expo Push Token fallita:", e.message);
+    // Nessun blocco dell'app: in assenza di un push token reale restano
+    // attive le notifiche locali quando l'app è in primo piano.
+    console.warn(
+      "Generazione/registrazione Expo Push Token fallita:",
+      e.message
+    );
     return null;
   }
 }

@@ -1,26 +1,36 @@
-import { API_URL, DEMO_MODE, PUSH_API_URL } from "./config";
-
+import * as SecureStore from "expo-secure-store";
+import { API_URL, DEMO_MODE, PUSH_API_URL, DEMO_ACCOUNTS_KEY } from "./config";
 
 // --- Dati simulati per la demo ---
 const MOCK_DELAY = 800;
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 
-// Device id allineato al firmware (config.DEVICE_ID in config.py: "ALVEA_04")
+const readDemoAccounts = async () => {
+  try {
+    const raw = await SecureStore.getItemAsync(DEMO_ACCOUNTS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) {
+    console.warn("Impossibile leggere gli account demo:", e);
+    return {};
+  }
+};
+
+const writeDemoAccounts = async (accounts) => {
+  try {
+    await SecureStore.setItemAsync(DEMO_ACCOUNTS_KEY, JSON.stringify(accounts));
+  } catch (e) {
+    console.warn("Impossibile salvare gli account demo:", e);
+  }
+};
+
+// Device id allineato al firmware
 const MOCK_DEVICE_ID = "ALVEA_04";
 
 const MOCK_LOGIN_RESPONSE = {
   access_token: "demo-token-alvea-2024",
   device_id: MOCK_DEVICE_ID,
-  // In DEMO_MODE simuliamo un accesso da medico, così la demo mostra anche le
-  // funzionalità riservate al medico (dashboard Grafana, configurazione device).
-  role: "medico",
 };
 
-// Campi e nomi allineati al payload reale del device (vedi "reading" in
-// main_real_mqtt.py/main_real_ble.py: device_id, patient_id, timestamp,
-// bpm, skin_temperature, respiration_rate, battery_pct, sensor_contact,
-// device_status, source). L'unico sensore biomedicale è l'ECG, da cui
-// derivano bpm e, via EDR, la frequenza respiratoria.
 const MOCK_LATEST = {
   device_id: MOCK_DEVICE_ID,
   patient_id: "demo-patient",
@@ -47,10 +57,11 @@ const MOCK_HISTORY = Array.from({ length: 10 }, (_, i) => ({
   timestamp: new Date(Date.now() - i * 60000).toISOString(),
 }));
 
-// Schema allineato a alerts.py (_build_alert): gravita (WARNING/CRITICAL/
-// INFO) + descrizione + parametro, non severity/message "all'inglese". I
-// nomi vengono comunque normalizzati da normalizeAlert() in MonitorScreen,
-// ma è bene che anche i dati di demo somiglino a un vero alert del device.
+// Schema allineato a alerts.py (_build_alert): i campi sono gravita
+// (WARNING/CRITICAL/INFO), descrizione e parametro..
+// I nomi vengono comunque normalizzati da normalizeAlert() in MonitorScreen,
+// così l'app visualizza gli alert in modo uniforme.
+
 const MOCK_ALERTS = [
   {
     device_id: MOCK_DEVICE_ID,
@@ -68,7 +79,7 @@ const MOCK_ALERTS = [
   },
 ];
 
-// --- Helper fetch con timeout per il backend reale ---
+// Funzione di supporto per fetch con timeout (backend reale).
 const fetchWithTimeout = (url, options = {}, timeoutMs = 8000) => {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
@@ -77,12 +88,23 @@ const fetchWithTimeout = (url, options = {}, timeoutMs = 8000) => {
   );
 };
 
-// --- Funzioni API ---
+// Funzioni API
 
 export const loginUser = async (username, password) => {
   if (DEMO_MODE) {
     await delay(MOCK_DELAY);
-    return MOCK_LOGIN_RESPONSE;
+    // In demo le credenziali sono verificate contro gli account registrati,
+    // così ogni account resta distinto e il login carica i dati corretti.
+    const accounts = await readDemoAccounts();
+    const account = accounts[username];
+    if (!account || account.password !== password)
+      throw new Error("Credenziali non valide");
+    return {
+      ...MOCK_LOGIN_RESPONSE,
+      device_id: account.device_id || MOCK_DEVICE_ID,
+      username,
+      patientInfo: account.patientInfo || null,
+    };
   }
   try {
     const bodyForm = new URLSearchParams({ username, password }).toString();
@@ -92,7 +114,10 @@ export const loginUser = async (username, password) => {
       body: bodyForm,
     });
     if (!response.ok) throw new Error("Credenziali non valide");
-    return await response.json();
+    const data = await response.json();
+    // Restituiamo anche lo username, così l'app può conservare i dati
+    // anagrafici separatamente per ciascun account.
+    return { ...data, username: data.username || username };
   } catch (e) {
     if (e.name === "AbortError")
       throw new Error("Server non raggiungibile. Controlla l'IP e la rete.");
@@ -103,6 +128,13 @@ export const loginUser = async (username, password) => {
 export const registerUser = async (username, password, patientInfo = {}) => {
   if (DEMO_MODE) {
     await delay(MOCK_DELAY);
+    // Salviamo l'account nel registro locale. Se l'username esiste già lo
+    // segnaliamo, invece di sovrascriverlo.
+    const accounts = await readDemoAccounts();
+    if (accounts[username])
+      throw new Error("Username già registrato. Scegline un altro.");
+    accounts[username] = { password, device_id: MOCK_DEVICE_ID, patientInfo };
+    await writeDemoAccounts(accounts);
     return {
       message: "Registrazione simulata completata.",
       patient: patientInfo,
@@ -176,54 +208,8 @@ export const fetchAlertHistory = async (token, deviceId, limit = 20) => {
   }
 };
 
-// --- Configurazione dispositivo da parte del medico (Punto 8 dei requisiti) ---
-// Il firmware (vedi main_real_mqtt.py/main_real_ble.py, mqtt_callback/
-// ble_command_callback) accetta comandi JSON con due chiavi opzionali:
-//   - publish_period_s: frequenza di invio della telemetria (secondi);
-//   - patient_id: associazione/rimozione paziente-dispositivo.
-// Lato MQTT il comando va pubblicato dal backend sul topic
-// "alvea/devices/<device_id>/commands" (config.TOPIC_CMD): l'app non parla
-// MQTT direttamente, quindi passa da un endpoint REST che il backend
-// Node-RED/Python dovrà esporre e che si occuperà di fare il publish reale.
-export const sendDeviceCommand = async (token, deviceId, command = {}) => {
-  if (DEMO_MODE) {
-    await delay(400);
-    console.log(
-      "[DEMO_MODE] Comando non inviato realmente al device:",
-      command
-    );
-    return { message: "Invio comando simulato (DEMO_MODE).", command };
-  }
-  try {
-    const response = await fetchWithTimeout(
-      `${API_URL}/devices/${deviceId}/commands`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(command),
-      }
-    );
-    if (!response.ok) throw new Error("Invio del comando al dispositivo non riuscito");
-    return await response.json();
-  } catch (e) {
-    if (e.name === "AbortError")
-      throw new Error("Server non raggiungibile. Controlla l'IP e la rete.");
-    throw e;
-  }
-};
+// Registrazione del token Expo per le notifiche push
 
-// --- Notifiche push (Punto 7 dei requisiti: gestione alert) ---
-// Registra sul backend l'Expo Push Token del dispositivo, associandolo
-// all'utente/paziente autenticato (token Bearer) e al device monitorato.
-// Il backend (vedi push_backend_example/) lo userà per inviare una push
-// reale quando rileva un alert critico, anche con l'app in background o
-// chiusa — cosa che le sole notifiche locali (Notifications.js) non
-// possono fare. Segue lo stesso pattern di /register-token visto
-// nell'esempio dell'academy (app_con_notifica), adattato al contratto
-// con autenticazione già usato dalle altre funzioni di questo file.
 export const registerPushToken = async (token, deviceId, expoPushToken) => {
   if (DEMO_MODE) {
     await delay(300);
