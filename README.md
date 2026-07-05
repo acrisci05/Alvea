@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🫁 Alvea
+# Alvea
 
 ### Wearable da caviglia per il monitoraggio dell'asma pediatrico
 
@@ -26,7 +26,7 @@ e dashboard per il medico.
 
 ---
 
-## ✨ In breve
+## In breve
 
 L'**ESP32** acquisisce i parametri da un **ECG (AD8232)** — dal quale ricava sia il
 **battito** (algoritmo Pan-Tompkins) sia il **respiro** tramite **EDR** (*ECG-Derived
@@ -39,13 +39,13 @@ JSON**, così passare dall'uno all'altro non cambia nulla a valle.
 
 | | |
 |---|---|
-| 🔴 **Alert clinici** | Tachipnea/bradipnea (respiro), tachicardia/bradicardia (BPM), febbre/ipotermia (temp. cutanea) |
-| 👤 **Ruoli (RBAC)** | Paziente/Caregiver (vede solo i propri dati) · Medico (vede tutti, configura le soglie, consulta l'audit) |
-| 📈 **Serie temporali** | InfluxDB + Grafana: ultimo valore, andamento, medie/min/max |
-| 📱 **App mobile** | Real-time via WebSocket, storico, statistiche, **notifiche** push/locali |
-| 🔐 **Sicurezza** | JWT + bcrypt, isolamento dei dati per ruolo, **audit log** delle operazioni |
+| **Alert clinici** | Tachipnea/bradipnea (respiro), tachicardia/bradicardia (BPM), febbre/ipotermia (temp. cutanea) |
+| **Ruoli (RBAC)** | Paziente/Caregiver (vede solo i propri dati) · Medico (vede tutti, configura le soglie, consulta l'audit) |
+| **Serie temporali** | InfluxDB + Grafana: ultimo valore, andamento, medie/min/max |
+| **App mobile** | Real-time via WebSocket, storico, statistiche, **notifiche** push/locali |
+| **Sicurezza** | JWT + bcrypt, isolamento dei dati per ruolo, **audit log** delle operazioni |
 
-## 🗺️ Architettura
+## Architettura
 
 ```mermaid
 flowchart LR
@@ -57,7 +57,7 @@ flowchart LR
     BE -- "WebSocket / SSE / REST" --> APP[App mobile · Paziente]
 ```
 
-### 🔬 Pipeline di acquisizione (sensori → metriche)
+### Pipeline di acquisizione (sensori → metriche)
 
 ```mermaid
 flowchart LR
@@ -72,7 +72,7 @@ flowchart LR
     PCT --> PAY
 ```
 
-### 🔁 Flusso telemetria e alert
+### Flusso telemetria e alert
 
 ```mermaid
 sequenceDiagram
@@ -87,7 +87,7 @@ sequenceDiagram
     BE-->>APP: push notification (alert critico)
 ```
 
-## 📦 Payload canonico
+## Payload canonico
 
 ```json
 {
@@ -104,7 +104,7 @@ sequenceDiagram
 }
 ```
 
-## 🩺 Scenari clinici (simulatore)
+## Scenari clinici (simulatore)
 
 | Scenario | Effetto | Alert atteso |
 |---|---|---|
@@ -112,7 +112,7 @@ sequenceDiagram
 | `asthma_attack` | respiro ↑ (tachipnea), battito ↑ | **critico** tachipnea + tachicardia |
 | `hardware_fault` | Sensore staccato | **tecnico** (nessun falso positivo) |
 
-## ✅ Conformità ai requisiti (Academy Medical Wearable Devices)
+## Conformità ai requisiti (Academy Medical Wearable Devices)
 
 | # | Requisito | Stato | Dove |
 |---|---|:--:|---|
@@ -128,7 +128,7 @@ sequenceDiagram
 | 10 | Sicurezza, privacy e tracciamento (audit) | ✅ | JWT, RBAC, `AuditLog` |
 | 11 | Documentazione architettura e API | ✅ | `docs/` |
 
-## 🚀 Avvio rapido (stack server)
+## Avvio rapido (stack server)
 
 Richiede **Docker** e **Docker Compose**.
 
@@ -140,15 +140,15 @@ docker compose up -d
 
 | Servizio | URL | Credenziali |
 |---|---|---|
-| 📊 Grafana (dashboard medico) | http://localhost:3000 | `admin` / `admin` |
-| 🔧 Node-RED (motore regole) | http://localhost:1880 | — |
-| 🗄️ InfluxDB (serie temporali) | http://localhost:8086 | `admin` / `alvea123` |
-| ⚡ Backend API (Swagger) | http://localhost:8000/docs | — |
-| 📡 MQTT Broker | `localhost:1883` | anonimo |
+| Grafana (dashboard medico) | http://localhost:3000 | `admin` / `admin` |
+| Node-RED (motore regole) | http://localhost:1880 | — |
+| InfluxDB (serie temporali) | http://localhost:8086 | `admin` / `alvea123` |
+| Backend API (Swagger) | http://localhost:8000/docs | — |
+| MQTT Broker | `localhost:1883` | anonimo |
 
 > Dashboard Grafana e flow Node-RED sono **provisionati automaticamente**.
 
-## 🧪 Prova senza hardware
+## Prova senza hardware
 
 ```bash
 pip install paho-mqtt
@@ -159,7 +159,7 @@ python scripts/publish_test.py --host localhost --scenario hardware_fault  # sen
 
 I grafici storici e gli alert si popolano in tempo reale su Grafana e sull'app.
 
-## 🔌 Firmware ESP32 (MicroPython)
+## Firmware ESP32 (MicroPython)
 
 1. Copia `firmware/secrets_example.py` in `firmware/secrets.py` e inserisci SSID/password Wi-Fi.
 2. In `firmware/config.py` imposta `MQTT_BROKER` con l'IP del PC che ospita lo stack.
@@ -180,7 +180,7 @@ termistore NTC `partitore→GPIO35 (ADC)` · batteria `partitore→GPIO36 (ADC)`
 > Respiratoria). La **temperatura** usa il termistore **NTC** linearizzato. Il BLE è una
 > modalità di test locale alternativa al Wi-Fi/MQTT.
 
-## 📱 App mobile (React Native / Expo)
+## App mobile (React Native / Expo)
 
 ```bash
 cd mobile && npm install && npx expo start
@@ -190,7 +190,7 @@ Imposta `API_URL` in `mobile/src/config.js` con l'IP del PC. Con backend reale
 (`DEMO_MODE = false`) registra prima il device del caregiver (`POST /devices`) e poi
 effettua il login. Dettagli e notifiche: vedi [`mobile/README.md`](mobile/README.md).
 
-## 📁 Struttura del repository
+## Struttura del repository
 
 ```text
 Alvea/
@@ -202,13 +202,13 @@ Alvea/
 └── docs/            # Requisiti, use case, E-R, sequence, architettura, sicurezza
 ```
 
-## 📚 Documentazione
+## Documentazione
 
 - [Relazione tecnica (PDF)](docs/RELAZIONE.pdf)
 - [Analisi dei requisiti](docs/01-analisi-requisiti.md) · [Casi d'uso](docs/02-use-case.md) · [Schema E-R](docs/03-er-schema.md)
 - [Diagrammi di sequenza](docs/04-sequence.md) · [Classi e attività](docs/06-classi-attivita.md) · [Architettura e API](docs/05-architettura.md) · [Sicurezza](docs/SICUREZZA.md)
 - [Immagini UML per il report](docs/diagrammi/) — PNG pronti da inserire
 
-## 📄 Licenza
+## Licenza
 
 Distribuito con licenza **MIT** (vedi [`LICENSE`](LICENSE)). Progetto didattico accademico.
