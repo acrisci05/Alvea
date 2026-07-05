@@ -1,22 +1,21 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, ActivityIndicator } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import * as SecureStore from "expo-secure-store";
 import LoginScreen from "./src/LoginScreen";
 import MonitorScreen from "./src/MonitorScreen";
+import { splashStyles, colors } from "./src/style";
 
 
 const SESSION_TOKEN_KEY = "alvea_token";
 const SESSION_DEVICE_KEY = "alvea_device_id";
-// Ruolo dell'utente (caregiver | medico) restituito dal login: lo conserviamo
-// in sessione per distinguere lato genitore e lato medico anche alla riapertura
-// dell'app, senza costringere l'utente a rifare il login (Punto 4 dei requisiti).
-const SESSION_ROLE_KEY = "alvea_role";
+const SESSION_USER_KEY = "alvea_username";
 
 export default function App() {
   const [token, setToken] = useState(null);
   const [deviceId, setDeviceId] = useState(null);
-  const [role, setRole] = useState(null);
+  const [username, setUsername] = useState(null);
   const [showSplash, setShowSplash] = useState(true);
 
   useEffect(() => {
@@ -24,11 +23,11 @@ export default function App() {
       try {
         const savedToken = await SecureStore.getItemAsync(SESSION_TOKEN_KEY);
         const savedDeviceId = await SecureStore.getItemAsync(SESSION_DEVICE_KEY);
-        const savedRole = await SecureStore.getItemAsync(SESSION_ROLE_KEY);
+        const savedUser = await SecureStore.getItemAsync(SESSION_USER_KEY);
         if (savedToken && savedDeviceId) {
           setToken(savedToken);
           setDeviceId(savedDeviceId);
-          setRole(savedRole);
+          setUsername(savedUser);
         }
         await new Promise((resolve) => setTimeout(resolve, 1500));
       } catch (e) {
@@ -40,41 +39,47 @@ export default function App() {
     prepare();
   }, []);
 
-  const handleLogin = async (newToken, newDeviceId, newRole) => {
+  const handleLogin = async (newToken, newDeviceId, newUsername) => {
     try {
       await SecureStore.setItemAsync(SESSION_TOKEN_KEY, newToken);
       await SecureStore.setItemAsync(SESSION_DEVICE_KEY, newDeviceId);
-      // Il ruolo può essere assente (backend più vecchio): salviamo solo se c'è
-      // per non lasciare in sessione un valore vuoto.
-      if (newRole) await SecureStore.setItemAsync(SESSION_ROLE_KEY, newRole);
-      else await SecureStore.deleteItemAsync(SESSION_ROLE_KEY);
+      if (newUsername)
+        await SecureStore.setItemAsync(SESSION_USER_KEY, newUsername);
     } catch (e) {
       console.warn("Impossibile salvare la sessione:", e);
     }
     setToken(newToken);
     setDeviceId(newDeviceId);
-    setRole(newRole ?? null);
+    setUsername(newUsername || null);
   };
 
   const handleLogout = async () => {
     try {
       await SecureStore.deleteItemAsync(SESSION_TOKEN_KEY);
       await SecureStore.deleteItemAsync(SESSION_DEVICE_KEY);
-      await SecureStore.deleteItemAsync(SESSION_ROLE_KEY);
+      await SecureStore.deleteItemAsync(SESSION_USER_KEY);
     } catch (e) {
       console.warn("Errore durante il logout:", e);
     }
     setToken(null);
     setDeviceId(null);
-    setRole(null);
+    setUsername(null);
   };
 
   if (showSplash) {
     return (
       <SafeAreaProvider>
-        <View style={splash.container}>
-          <Text style={splash.logo}>Alvea</Text>
-          <Text style={splash.tagline}>Monitoraggio pediatrico</Text>
+        <View style={splashStyles.container}>
+          <View style={splashStyles.badge}>
+            <Ionicons name="heart" size={36} color={colors.accent} />
+          </View>
+          <Text style={splashStyles.logo}>Alvea</Text>
+          <Text style={splashStyles.tagline}>Monitoraggio pediatrico</Text>
+          <ActivityIndicator
+            size="small"
+            color={colors.primary}
+            style={splashStyles.loader}
+          />
         </View>
       </SafeAreaProvider>
     );
@@ -86,7 +91,7 @@ export default function App() {
         <MonitorScreen
           token={token}
           deviceId={deviceId}
-          role={role}
+          username={username}
           onLogout={handleLogout}
         />
       </SafeAreaProvider>
@@ -99,24 +104,3 @@ export default function App() {
     </SafeAreaProvider>
   );
 }
-
-const splash = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#3A506B",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  logo: {
-    color: "#FFFFFF",
-    fontSize: 42,
-    fontWeight: "800",
-    letterSpacing: 2,
-  },
-  tagline: {
-    color: "#81D4FA",
-    fontSize: 15,
-    marginTop: 10,
-    fontWeight: "500",
-  },
-});
