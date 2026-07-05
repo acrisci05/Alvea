@@ -101,7 +101,24 @@ function toDate(timestamp) {
   if (typeof timestamp === "number") {
     return timestamp < 1e12 ? new Date(timestamp * 1000) : new Date(timestamp);
   }
+  if (typeof timestamp === "string") {
+    // Le datetime del backend arrivano come str(datetime), es. "2026-07-05
+    // 13:39:00.123456": spazio al posto della 'T' e microsecondi a 6 cifre,
+    // un formato che alcuni motori JS (Hermes su React Native) non riescono a
+    // interpretare e che darebbe "Invalid date". Lo normalizziamo in ISO con
+    // millisecondi a 3 cifre; le stringhe già ISO restano invariate.
+    const iso = timestamp.replace(" ", "T").replace(/(\.\d{3})\d+$/, "$1");
+    return new Date(iso);
+  }
   return new Date(timestamp);
+}
+
+// Il momento di una lettura/alert può arrivare come "ts" (datetime del backend,
+// sia via REST sia via WebSocket) oppure come "timestamp" (payload del firmware
+// e dati di demo). Restituisce il primo campo disponibile, così la stessa riga
+// funziona con qualunque sorgente.
+function tsOf(x) {
+  return x?.ts ?? x?.timestamp;
 }
 
 // Il firmware (alerts.py: _build_alert) pubblica alert con i campi "gravita"
@@ -216,9 +233,10 @@ export default function MonitorScreen({ token, deviceId, username, onLogout }) {
   // Aggiunge una lettura in tempo reale in cima allo storico (max 20 righe),
   // evitando di duplicare la riga se ha lo stesso timestamp della prima.
   const addReadingToHistory = useCallback((m) => {
-    if (!m || !m.timestamp) return;
+    const t = tsOf(m);
+    if (!m || !t) return;
     setHistory((prev) => {
-      if (prev.length > 0 && prev[0]?.timestamp === m.timestamp) return prev;
+      if (prev.length > 0 && tsOf(prev[0]) === t) return prev;
       return [m, ...prev].slice(0, 20);
     });
   }, []);
@@ -273,6 +291,17 @@ export default function MonitorScreen({ token, deviceId, username, onLogout }) {
               if (tabRef.current !== "alerts") {
                 setUnreadAlerts((n) => n + normalized.length);
               }
+            }
+          } else if (m.type === "alert" && m.device_id === deviceId) {
+            // Alert hardware/locale inoltrato dal backend (batteria scarica,
+            // guasto sensore, leads-off persistente): arriva come messaggio a
+            // sé, non incluso in una lettura. Senza questo ramo comparirebbe
+            // solo al successivo refresh REST e non in tempo reale.
+            const normalized = normalizeAlert(m);
+            setAlerts((prev) => [normalized, ...prev].slice(0, 20));
+            sendAlertNotification(normalized);
+            if (tabRef.current !== "alerts") {
+              setUnreadAlerts((n) => n + 1);
             }
           }
         } catch (parseError) {
@@ -620,7 +649,7 @@ export default function MonitorScreen({ token, deviceId, username, onLogout }) {
               style={[styles.histRow, i === arr.length - 1 && styles.histRowLast]}
             >
               <Text style={[styles.histTime, styles.histTimeCol]}>
-                {toDate(h.timestamp).toLocaleTimeString("it-IT")}
+                {toDate(tsOf(h)).toLocaleTimeString("it-IT")}
               </Text>
               <Text style={[styles.histVal, styles.histRight]}>{h.bpm ?? "--"}</Text>
               <Text style={[styles.histVal, styles.histRight]}>
@@ -676,8 +705,8 @@ export default function MonitorScreen({ token, deviceId, username, onLogout }) {
               {severityLabel(a.severity)}
             </Text>
             <Text style={styles.alertMsg}>{a.message}</Text>
-            {a.timestamp && (
-              <Text style={styles.alertTime}>{toDate(a.timestamp).toLocaleString("it-IT")}</Text>
+            {tsOf(a) && (
+              <Text style={styles.alertTime}>{toDate(tsOf(a)).toLocaleString("it-IT")}</Text>
             )}
           </View>
         ))
