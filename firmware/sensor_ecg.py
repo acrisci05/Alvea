@@ -51,9 +51,7 @@ class ECGMonitor:
     """Wrapper hardware AD8232 con Ring Buffer statico privo di allocazioni dinamiche."""
 
     def __init__(self):
-        self.adc = machine.ADC(machine.Pin(PIN_ECG))
-        self.adc.atten(machine.ADC.ATTN_11DB)     
-        self.adc.width(machine.ADC.WIDTH_12BIT)   
+        self.adc = machine.ADC(machine.Pin(PIN_ECG), atten=machine.ADC.ATTN_11DB)
         self.lo_plus = machine.Pin(PIN_LO_PLUS, machine.Pin.IN)
         self.lo_minus = machine.Pin(PIN_LO_MINUS, machine.Pin.IN)
         
@@ -89,7 +87,7 @@ class ECGMonitor:
         return self.lo_plus.value() == 0 or self.lo_minus.value() == 0
 
     def read_raw(self):
-        return self.adc.read()
+        return self.adc.read_u16() >> 4
 
     def reset(self):
         self._deriv_sq = [0] * self._deriv_win
@@ -115,9 +113,6 @@ class ECGMonitor:
         self._prev_v = v
         d_sq = d * d
 
-        # Scrittura nel Ring Buffer statico, mantenendo la somma
-        # incrementale: sottrazione del valore che viene sovrascritto (quello
-        # piu' vecchio nella finestra) e aggiunta del nuovo.
         old_val = self._deriv_sq[self._deriv_ptr]
         self._deriv_sq[self._deriv_ptr] = d_sq
         self._deriv_sum += d_sq - old_val
@@ -141,8 +136,7 @@ class ECGMonitor:
             self._buffer_filled = True
 
         # Ricalcolo soglia adattiva (~10 Hz): O(1), usa le statistiche
-        # incrementali (sum esatta, max a decadimento) invece di
-        # riscandire l'intero buffer ad ogni ricalcolo.
+        # incrementali (sum esatta, max a decadimento)
         if self._i % 25 == 0 and (self._buffer_filled or self._deriv_ptr >= SAMPLE_RATE_HZ):
             valid_n = self._deriv_win if self._buffer_filled else self._deriv_ptr
             mean = self._deriv_sum // valid_n
@@ -210,10 +204,6 @@ class ECGMonitor:
     def get_rr_history(self):
         """Restituisce la lista degli intervalli RR (in ms) della finestra
         ESTESA (RR_HISTORY_S, default 30s), in ordine cronologico.
-
-        E' la base dati da cui resp_edr.py deriva l'EDR (Frequenza
-        Respiratoria), perche' questa metrica necessita di piu' cicli
-        respiratori per essere stabile.
         """
         if self._rr_hist_count == 0:
             return []

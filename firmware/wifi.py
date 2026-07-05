@@ -17,7 +17,7 @@ class WiFiManager:
         return self.wlan.isconnected()
 
     def rinfresca_connessione(self):
-        """Gestisce la riconnessione automatica senza bloccare il codice clinico."""
+        """Gestione della riconnessione in automatico, senza bloccare il codice clinico."""
         if self.wlan.isconnected():
             # Connessione attiva: resetta lo stato del tentativo.
             self._connect_attempt_started = None

@@ -13,7 +13,7 @@ MIN_RR_FOR_EDR = 10    # numero minimo di RR per tentare la stima del respiro
 EDR_FILTER_ALPHA = 0.2   # costante del filtro IIR passa-basso sulla serie RR
 PHYSIO_RESP_MIN = 8.0    # limiti fisiologici plausibili (atti/min) per scartare stime spurie
 # Il limite superiore e' volutamente piu' alto della soglia di alert
-# clinico (DEFAULT_ALARM_RESP_MAX = 40, vedi config.py): una tachipnea
+# clinico (DEFAULT_ALARM_RESP_MAX = 40): una tachipnea
 # severa in eta' pediatrica (crisi d'asma avanzata) puo' superare
 # abbondantemente i 40 atti/min, e l'algoritmo non deve scartare come
 # "non plausibile" proprio la stima piu' critica da rilevare.
@@ -22,15 +22,6 @@ PHYSIO_RESP_MAX = 60.0
 def compute_edr_resp_rate(rr_list):
     """Stima la Frequenza Respiratoria (atti/min) dalla modulazione della
     serie degli intervalli RR (EDR - ECG-Derived Respiration).
-
-    Tecnica: filtro IIR passa-basso sulla serie RR (in ordine cronologico,
-    trattata come un segnale campionato "a battito", non a tempo costante)
-    per isolare l'oscillazione lenta dovuta al respiro, poi conteggio
-    degli attraversamenti della media mobile (zero-crossing).
-
-    Ritorna 0.0 se la finestra e' troppo corta o il risultato non e'
-    fisiologicamente plausibile (8-45 atti/min), per evitare di
-    pubblicare una stima rumorosa come se fosse un dato clinico valido.
     """
     n = len(rr_list)
     if n < MIN_RR_FOR_EDR:

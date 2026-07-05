@@ -7,12 +7,10 @@ import config
 
 try:
     import secrets
-    _MQTT_BROKER = getattr(secrets, "MQTT_BROKER", config.MQTT_BROKER)
     _MQTT_USER = getattr(secrets, "MQTT_USER", config.MQTT_USER)
     _MQTT_PASS = getattr(secrets, "MQTT_PASS", config.MQTT_PASS)
     
 except ImportError:
-    _MQTT_BROKER = config.MQTT_BROKER
     _MQTT_USER = config.MQTT_USER
     _MQTT_PASS = config.MQTT_PASS
 
@@ -21,7 +19,7 @@ class MQTTPublisher:
     def __init__(self, message_callback=None):
         self.client = MQTTClient(
             config.DEVICE_ID,
-            _MQTT_BROKER,
+            config.MQTT_BROKER,
             port=config.MQTT_PORT,
             user=_MQTT_USER,
             password=_MQTT_PASS,

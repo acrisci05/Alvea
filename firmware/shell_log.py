@@ -2,8 +2,7 @@
 
 def format_shell_line(reading, status_string):
     """Costruisce una riga compatta leggibile a partire dal dict di
-    telemetria (lo stesso 'reading' che viene poi serializzato in JSON
-    e pubblicato via MQTT/BLE)."""
+    telemetria """
     bpm = reading.get("bpm", 0.0) or 0.0
     temp = reading.get("skin_temperature", 0.0) or 0.0
     resp = reading.get("respiration_rate", 0.0) or 0.0
@@ -17,9 +16,5 @@ def format_shell_line(reading, status_string):
         bpm, temp, resp, batt_str, contact_str, status_string
     )
 
-
 def log_reading(reading, status_string):
-    """Stampa la riga compatta sulla shell (seriale). Da chiamare ad ogni
-    ciclo di telemetria, in aggiunta agli altri
-    print() di trasmissione/debug gia' presenti nei main."""
     print(format_shell_line(reading, status_string))

@@ -8,7 +8,7 @@ from transport_ble import BLEPeripheral
 from alerts import AlertManager
 import shell_log
 
-print("== ALVEA TEST-RIG :: SIMULATORE BLE ASINCRONO (modalita' alternativa/demo) ==")
+print("ALVEA TEST-RIG :: SIMULATORE BLE ASINCRONO (modalita' alternativa/demo)")
 
 # --- VARIABILE DI CONFIGURAZIONE DINAMICA ---
 current_publish_period = config.DEFAULT_PUBLISH_PERIOD_S
@@ -34,18 +34,6 @@ def ble_command_callback(payload):
             nuovo_patient_id = data["patient_id"]
             current_patient_id = nuovo_patient_id if nuovo_patient_id else None
             print(f"-> [OK] Device associato al paziente: {current_patient_id}")
-        if "resp_rate_max" in data:
-            try:
-                alert_mgr.update_thresholds(resp_max=float(data["resp_rate_max"]))
-                print("-> [OK] Soglia frequenza respiratoria aggiornata.")
-            except (ValueError, TypeError):
-                print("-> [ERRORE] Valore resp_rate_max non valido.")
-        if "battery_min_pct" in data:
-            try:
-                alert_mgr.update_thresholds(battery_min=float(data["battery_min_pct"]))
-                print("-> [OK] Soglia batteria minima aggiornata.")
-            except (ValueError, TypeError):
-                print("-> [ERRORE] Valore battery_min_pct non valido.")
 
     except Exception as e:
         print("-> [ERRORE] Parsing del comando BLE fallito:", e)

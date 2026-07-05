@@ -1,5 +1,4 @@
 # ntp_time.py - Sincronizzazione RTC via NTP per ottenere Unix timestamp reali.
-#
 # Questo modulo va chiamato una volta dopo la connessione Wi-Fi, prima di
 # iniziare a pubblicare telemetria.
 
@@ -9,6 +8,17 @@ try:
     import ntptime
 except ImportError:
     ntptime = None
+
+
+# --- Conversione epoca MicroPython -> epoca Unix
+_EPOCH_OFFSET = 946684800 if time.gmtime(0)[0] == 2000 else 0
+
+
+def unix_now():
+    """Ritorna l'ora corrente come timestamp Unix (secondi dal 1970-01-01),
+    indipendentemente dall'epoca interna del firmware. Da usare per il campo
+    'timestamp' di ogni payload di telemetria/alert."""
+    return time.time() + _EPOCH_OFFSET
 
 
 def sync_time(max_retries=3, retry_delay_s=2):
@@ -23,7 +33,7 @@ def sync_time(max_retries=3, retry_delay_s=2):
     for attempt in range(1, max_retries + 1):
         try:
             ntptime.settime()  # imposta l'RTC in UTC
-            now = time.time()
+            now = unix_now()
             print("[NTP] Sincronizzazione riuscita. Unix time corrente:", now)
             return True
         except Exception as e:
@@ -33,13 +43,3 @@ def sync_time(max_retries=3, retry_delay_s=2):
     print("[NTP] ATTENZIONE: impossibile sincronizzare l'ora. "
           "I timestamp potrebbero essere errati (epoca MicroPython, non Unix).")
     return False
-
-
-# Secondi tra 1970-01-01 (epoca Unix) e 2000-01-01 (epoca MicroPython su ESP32).
-UNIX_EPOCH_OFFSET = 946684800
-
-
-def unix_time():
-    """Ora corrente come timestamp Unix (secondi dal 1970), convertendo
-    l'epoca MicroPython dell'RTC ESP32 in epoca Unix."""
-    return time.time() + UNIX_EPOCH_OFFSET
