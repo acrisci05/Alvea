@@ -104,9 +104,6 @@ sequenceDiagram
 }
 ```
 
-> Nessun campo `spo2`: il dispositivo ha un solo sensore biomedicale, l'ECG (AD8232),
-> da cui derivano sia il BPM sia, via EDR, la frequenza respiratoria.
-
 ## 🩺 Scenari clinici (simulatore)
 
 | Scenario | Effetto | Alert atteso |
