@@ -15,6 +15,18 @@
 
 from . import config
 
+# --- FIX: stato di persistenza per il debounce del contatto (per device) ---
+# evaluate() viene richiamata una volta per ogni lettura in arrivo
+# (mqtt_ingest.py, ~1 Hz): senza un contatore persistente tra le chiamate,
+# ogni singola lettura con sensor_contact=False genererebbe un nuovo alert
+# tecnico "contact_lost" (un record ogni secondo per l'intera durata del
+# distacco), invece del singolo alert alla transizione descritto in tesi
+# (debounce di config.CONTACT_LOST_DEBOUNCE_S letture consecutive, § 2.5 e
+# § 2.7.2) e già correttamente implementato nel flow Node-RED equivalente
+# (nodo "Soglie + Line Protocol", contatore "lost" in context).
+_contact_lost_streaks: dict[str, int] = {}
+
+
 def evaluate(reading: dict, thresholds: dict | None = None) -> list[dict]:
     """Valuta le soglie su una lettura e restituisce la lista di alert generati.
 
@@ -35,19 +47,35 @@ def evaluate(reading: dict, thresholds: dict | None = None) -> list[dict]:
     th = thresholds or config.FLEMING_THRESHOLDS["fallback"]
     alerts = []
     contact = reading.get("sensor_contact", True)
+    device_id = reading.get("device_id")
 
     # --- Controllo contatto fascia (antipanico) ----------------------------
     # Se la fascia è staccata i valori fisiologici sono 0 (azzerati dal firmware).
     # Viene emesso solo l'allarme tecnico e interrotta la valutazione clinica.
     if not contact:
-        alerts.append(_a(
-            parameter="contact",
-            kind="contact_lost",
-            severity="technical",
-            message="Fascia non a contatto: rilevazione sospesa.",
-            value=None,
-        ))
+        # FIX: incrementa il contatore di persistenza del device e genera
+        # l'alert tecnico solo al raggiungimento esatto della soglia di
+        # debounce (config.CONTACT_LOST_DEBOUNCE_S), cosi' come gia' fatto
+        # dal flow Node-RED. Da quel punto in poi il contatore continua a
+        # crescere ma non coincide piu' con la soglia, quindi l'alert non
+        # viene ripetuto ad ogni lettura successiva finche' il contatto non
+        # torna (vedi ramo sotto, che azzera il contatore).
+        streak = _contact_lost_streaks.get(device_id, 0) + 1
+        _contact_lost_streaks[device_id] = streak
+        if streak == config.CONTACT_LOST_DEBOUNCE_S:
+            alerts.append(_a(
+                parameter="contact",
+                kind="contact_lost",
+                severity="technical",
+                message="Fascia non a contatto: rilevazione sospesa.",
+                value=None,
+            ))
         return alerts
+
+    # FIX: il contatto e' presente: azzera il contatore di persistenza del
+    # distacco, cosi' che una futura perdita di contatto debba di nuovo
+    # accumulare CONTACT_LOST_DEBOUNCE_S letture prima di generare un alert.
+    _contact_lost_streaks[device_id] = 0
 
     # --- Frequenza respiratoria (derivante dalla tecnica EDR) ---
     resp = reading.get("respiration_rate", 0) or 0
