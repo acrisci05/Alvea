@@ -1,4 +1,4 @@
-# Fase 3 — Diagramma delle Classi e Diagramma di Attività
+# Diagramma delle Classi e Diagramma di Attività
 
 Questi due diagrammi completano la vista di progettazione (modello 4+1) del
 backend Alvea, insieme al Diagramma dei Casi d'Uso (`02-use-case.md`), allo
@@ -121,7 +121,7 @@ classDiagram
 ## 2) Diagramma di Attività — valutazione soglie e generazione alert
 
 Modella il percorso di una singola lettura di telemetria dalla ricezione MQTT
-fino al broadcast in tempo reale, con la **regola anti-panico**: se il sensore
+fino al broadcast in tempo reale, con la **regola antipanico**: se il sensore
 non è a contatto si emette solo un alert *tecnico* e si sospende la valutazione
 fisiologica, evitando falsi allarmi (`backend/app/alerts.py`,
 `backend/app/mqtt_ingest.py`).
