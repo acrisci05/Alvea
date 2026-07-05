@@ -173,9 +173,11 @@ class Alert(Base):
 
 
 class DeviceThreshold(Base):
+    class DeviceThreshold(Base):
     """Soglie cliniche configurabili per-device (impostate dal medico).
     Se per un device non esiste una riga in questa tabella, la valutazione
-    degli alert usa config.DEFAULT_THRESHOLDS. Ogni modifica è tracciata in AuditLog
+    degli alert usa config.FLEMING_THRESHOLDS calcolate sull'età del paziente. 
+    Ogni modifica è tracciata in AuditLog
     """
 
     __tablename__ = "device_thresholds"
