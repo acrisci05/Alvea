@@ -15,7 +15,7 @@ in `mobile/src/api.js`; la configurazione in `mobile/src/config.js`.
 In **`mobile/src/config.js`**:
 
 - **`API_URL`** — l'indirizzo del backend sulla rete locale (es.
-  `http://192.168.1.33:8000`). <u>È l'unico valore da cambiare per puntare
+  `http://192.168.1.50:8000`). <u>È l'unico valore da cambiare per puntare
   l'app al PC giusto:</u> da qui derivano sia l'URL REST sia quello
   WebSocket.
 - **`getWsUrl(token)`** — costruisce l'URL del canale realtime trasformando

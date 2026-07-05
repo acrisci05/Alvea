@@ -1,5 +1,5 @@
 {
-  "license": "0BSD",
+  "license": "MIT",
   "main": "index.js",
   "scripts": {
     "start": "expo start",
