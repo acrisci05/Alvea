@@ -17,6 +17,8 @@ import json
 import re
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
 
 import aiomqtt
 from fastapi import (FastAPI, Depends, HTTPException, status, Request,
@@ -192,10 +194,21 @@ async def register(data: schemas.CaregiverCreate, request: Request,
         patient_id=patient_id, baby_name=data.patient_name,
     )
 
-    # 3) scheda paziente (Punto 9) con i dati anagrafici della registrazione
+    # 3) Scheda paziente: costruiamo il record con nome e data di nascita stimata
+    patient_data = {}
     if data.patient_name:
+        patient_data["full_name"] = data.patient_name
+    
+    # Calcola una data di nascita approssimata basata su anni/mesi forniti dall'app
+    if data.age_years is not None or data.age_months is not None:
+        years = data.age_years or 0
+        months = data.age_months or 0
+        birth_date = datetime.utcnow() - relativedelta(years=years, months=months)
+        patient_data["birth_date"] = birth_date.strftime("%Y-%m-%d")
+
+    if patient_data:
         await crud.upsert_patient_record(
-            db, device_id, {"full_name": data.patient_name}, user.username
+            db, device_id, patient_data, user.username
         )
 
     # 4) notifica il firmware via MQTT (best-effort)
@@ -402,7 +415,7 @@ async def send_device_command(device_id: str,
 
     Comandi supportati (DeviceCommand):
       - publish_period_s: frequenza di invio dati (es. 2 = ogni 2 secondi)
-      - patient_id: associa o disassocia il paziente dal dispositivo
+      - patient_id: assegna (o rimuove, passando None) il paziente al device
 
     Restituisce 404/403 se il device non esiste o non è di competenza,
     503 se il broker MQTT non è raggiungibile.
