@@ -2,7 +2,7 @@
 
 Progetto **Alvea** — dispositivo indossabile da caviglia per il monitoraggio dell'asma pediatrico (frequenza respiratoria via EDR, battito cardiaco, temperatura cutanea), con rilevamento dell'aderenza del sensore.
 
-> Formato `RQ-XX` come da Incontro 03. Tipo: **F** funzionale / **NF** non
+> Formato `RQ-XX`. Tipo: **F** funzionale / **NF** non
 > funzionale. Priorità: intero in `[0,5]` (0 = massima). Stato: **IMPL**
 > implementato nel repository sorgente, **PLAN** progettato ma non ancora
 > realizzato (vedi anche `docs/RELAZIONE.pdf`, Sezione "Stato di
@@ -41,8 +41,6 @@ Progetto **Alvea** — dispositivo indossabile da caviglia per il monitoraggio d
 | RQ-22 | Dispositivo **didattico**, non medico; alimentazione solo a bassa tensione | NF | Safety | 0 | IMPL |
 | RQ-23 | Simulatore (HIL test) e hardware reale con **lo stesso schema** di payload | NF | Maintainability | 1 | IMPL |
 
-> Ogni requisito va validato dall'Esperto Disciplinare e dal Tutor: senza
-> validazione esplicita, non esiste.
 
 ## Nota sull'architettura sensoristica
 
