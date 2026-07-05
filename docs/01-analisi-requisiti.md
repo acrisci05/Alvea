@@ -1,4 +1,4 @@
-# Fase 2 — Analisi dei Requisiti
+# Fase 1 -Analisi dei Requisiti
 
 Progetto **Alvea** — dispositivo indossabile da caviglia per il monitoraggio dell'asma pediatrico (frequenza respiratoria via EDR, battito cardiaco, temperatura cutanea), con rilevamento dell'aderenza del sensore.
 
