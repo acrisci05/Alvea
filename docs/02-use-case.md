@@ -1,11 +1,11 @@
-# Fase 3 — Diagramma dei Casi d'Uso
+# Fase 2 —Diagramma dei Casi d'Uso
 
 Attori: **Paziente / Caregiver** (attore primario, lato genitore: monitora e
 consulta i propri dati), **Medico** (attore primario con permessi estesi: vede
 tutti i pazienti, configura le soglie cliniche e consulta l'audit log) e
 **Dispositivo ESP32** (attore secondario che immette telemetria e riceve
 configurazioni). La distinzione dei due ruoli applicativi è **implementata** nel
-backend (RBAC sul campo `role`); vedi la nota in fondo.
+backend (RBAC sul campo `role`).
 
 ```mermaid
 flowchart LR
