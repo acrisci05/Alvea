@@ -33,14 +33,14 @@ Tre percorsi paralleli, **stesso payload**:
 - **Controllo (Ritorno):** Backend (input dal caregiver, es. frequenza di invio) → MQTT (commands) → ESP32 (aggiornamento configurazioni on-the-fly).
 - **Alternativo:** ESP32 → BLE → eventuale ricevitore (collegamento locale; il firmware lo implementa ma l'app mobile attuale non ha alcun client BLE, comunica solo via REST/WebSocket).
 
-## Modello 4+1 (sintesi)
+## Modello 4+1
 
 - **Vista logica:** Caregiver (con campo `role`: `caregiver`/`medico`), Device, Reading, Alert, DeviceThreshold, PatientRecord, AuditLog (vedi E-R). L'RBAC Medico/Paziente è **implementato** sia a livello di dati sia di autorizzazione (campo `role`, `authorized_device()`, `require_medico`; isolamento esteso al canale realtime).
 - **Vista di processo:** task asincroni sull'Edge (lettura sensori non bloccante 250Hz/50Hz) e sul Server (listener MQTT + endpoint REST/WebSocket concorrenti tramite `asyncio`).
 - **Vista di sviluppo:** monorepo a moduli — `firmware/`, `backend/`,
   `docker-stack/`, `mobile/`, `scripts/`, `docs/`.
 - **Vista fisica:** ESP32 (edge alla caviglia) ↔ rete Wi-Fi ↔ host Docker (Server) ↔ smartphone/PC. Architettura deployabile in cloud o on-premise.
-- **Scenari (+1):** i casi d'uso del documento Fase 3 (Monitoraggio asma, gestione alert, configurazione remota).
+- **Scenari (+1):** i casi d'uso del documento Fase 2 (Monitoraggio asma, gestione alert, configurazione remota).
 
 ## Porte dei servizi
 
