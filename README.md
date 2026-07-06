@@ -207,7 +207,7 @@ Alvea/
 - [Relazione tecnica (PDF)](docs/RELAZIONE.pdf)
 - [Analisi dei requisiti](docs/01-analisi-requisiti.md) · [Casi d'uso](docs/02-use-case.md) · [Schema E-R](docs/03-er-schema.md)
 - [Diagrammi di sequenza](docs/04-sequence.md) · [Classi e attività](docs/06-classi-attivita.md) · [Architettura e API](docs/05-architettura.md) · [Sicurezza](docs/SICUREZZA.md)
-- [Immagini UML per il report](docs/diagrammi/) — PNG pronti da inserire
+- [Immagini UML](docs/diagrammi/)
 
 ## Licenza
 
