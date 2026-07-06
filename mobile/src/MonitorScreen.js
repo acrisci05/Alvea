@@ -214,6 +214,7 @@ export default function MonitorScreen({ token, deviceId, username, onLogout }) {
   const reconnectAttemptRef = useRef(0);
   const reconnectTimerRef = useRef(null);
   const isMountedRef = useRef(true);
+  const pushTokenRegisteredRef = useRef(false);
   // Riferimento sempre aggiornato alla scheda attiva: serve dentro il
   // callback del WebSocket, che altrimenti "vedrebbe" un valore obsoleto.
   const tabRef = useRef(tab);
@@ -252,7 +253,11 @@ export default function MonitorScreen({ token, deviceId, username, onLogout }) {
   // All'avvio: registra le notifiche push, carica lo storico e i dati paziente.
   useEffect(() => {
     registerForPushNotifications().then((status) => {
-      if (status === "granted") registerExpoPushTokenOnBackend(token, deviceId);
+      if (status === "granted") {
+        registerExpoPushTokenOnBackend(token, deviceId).then((expoPushToken) => {
+          pushTokenRegisteredRef.current = !!expoPushToken;
+        });
+      }
     });
     loadHistory();
     // Carichiamo i dati anagrafici DELL'ACCOUNT loggato. Se non li troviamo
@@ -293,7 +298,11 @@ export default function MonitorScreen({ token, deviceId, username, onLogout }) {
             if (m.alerts && m.alerts.length > 0) {
               const normalized = m.alerts.map(normalizeAlert);
               setAlerts((prev) => [...normalized, ...prev].slice(0, 20));
-              normalized.forEach((a) => sendAlertNotification(a));
+              normalized.forEach((a) => {
+                if (a.severity !== "critico" || !pushTokenRegisteredRef.current) {
+                  sendAlertNotification(a);
+                }
+              });
               // Se l'utente non è sulla scheda Allarmi, segnala i nuovi
               // arrivi con l'indicatore.
               if (tabRef.current !== "alerts") {
@@ -307,7 +316,9 @@ export default function MonitorScreen({ token, deviceId, username, onLogout }) {
             // solo al successivo refresh REST e non in tempo reale.
             const normalized = normalizeAlert(m);
             setAlerts((prev) => [normalized, ...prev].slice(0, 20));
-            sendAlertNotification(normalized);
+            if (normalized.severity !== "critico" || !pushTokenRegisteredRef.current) {
+              sendAlertNotification(normalized);
+            }
             if (tabRef.current !== "alerts") {
               setUnreadAlerts((n) => n + 1);
             }
