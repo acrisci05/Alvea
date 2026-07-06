@@ -12,3 +12,4 @@ python-multipart==0.0.12
 aiomqtt==2.3.0
 influxdb-client==1.46.0
 httpx==0.27.2
+python-dateutil==2.9.0.post0   # relativedelta: stima data di nascita in main.py (/register)
