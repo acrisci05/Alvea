@@ -64,7 +64,7 @@ arrivano sul topic `.../alerts` e vengono normalizzati nello stesso formato.
 Le soglie cliniche sono per-device (`DeviceThreshold`) e modificabili solo dal
 medico via `PUT /devices/{id}/thresholds` (validazione di coerenza:
 `crit_low <= warn_low <= warn_high <= crit_high`). In assenza di una
-configurazione dedicata si usano i default di `config.DEFAULT_THRESHOLDS`. La
+configurazione dedicata si usano i default di `config.FLEMING_THRESHOLDS`. La
 pipeline MQTT applica automaticamente le soglie del device in fase di valutazione.
 
 ## Scheda paziente e anamnesi

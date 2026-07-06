@@ -148,5 +148,5 @@ flowchart TD
 
 > Le soglie applicate sono quelle configurate dal medico per il device
 > (`DeviceThreshold`) oppure, in loro assenza, i default di
-> `config.DEFAULT_THRESHOLDS`. Ogni alert riporta paziente, parametro,
+> `config.FLEMING_THRESHOLDS`. Ogni alert riporta paziente, parametro,
 > descrizione, gravità e timestamp (Gestione alert - Core).

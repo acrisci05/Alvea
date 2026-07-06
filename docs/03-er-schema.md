@@ -105,7 +105,7 @@ erDiagram
   `authorized_device()` (vedi `backend/app/main.py`).
 - **Soglie configurabili:** `DEVICE_THRESHOLD` conserva le soglie cliniche
   per-device impostate dal medico; in sua assenza si usano i default di
-  `config.DEFAULT_THRESHOLDS`.
+  `config.FLEMING_THRESHOLDS`.
 - **Scheda paziente:** `PATIENT_RECORD` contiene anagrafica e anamnesi
   (patologie, farmaci, allergie) del bambino associato al device.
 - **Audit log:** `AUDIT_LOG` è un registro append-only delle operazioni
