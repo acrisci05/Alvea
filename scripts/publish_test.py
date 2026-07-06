@@ -20,7 +20,7 @@ DEVICE_ID = "ALVEA_04"
 TOPIC = f"alvea/devices/{DEVICE_ID}/telemetry" 
 
 # Stato persistente tra una chiamata e l'altra (valori correnti del "paziente simulato")
-_state = {"bpm": 100.0, "skin_temp": 32.5, "resp": 25.0}
+_state = {"bpm": 100.0, "skin_temp": 36.6, "resp": 25.0}
 
 def _walk(current, target_min, target_max, step):
     """Sposta 'current' di un piccolo passo casuale, restando nel range."""
@@ -41,9 +41,9 @@ def make_reading(scenario):
     # 2. SCENARIO: Attacco d'asma (Tachipnea + Tachicardia lieve).
     #    Sale gradualmente verso i valori di crisi invece di partire già alto.
     elif scenario == "asthma_attack":
-        _state["bpm"] = _walk(_state["bpm"], 115.0, 130.0, 2.0)
-        _state["skin_temp"] = _walk(_state["skin_temp"], 31.5, 33.5, 0.3)
-        _state["resp"] = _walk(_state["resp"], 40.0, 50.0, 1.5)
+        _state["bpm"] = _walk(_state["bpm"], 120.0, 140.0, 2.0)
+        _state["skin_temp"] = _walk(_state["skin_temp"], 36.3, 37.0, 0.2)
+        _state["resp"] = _walk(_state["resp"], 64.0, 74.0, 1.5)
         bpm = round(_state["bpm"], 1)
         skin_temp = round(_state["skin_temp"], 1)
         resp_rate = round(_state["resp"], 1)
@@ -55,7 +55,7 @@ def make_reading(scenario):
             bpm, skin_temp, resp_rate = 0.0, 0.0, 0.0
         else:
             _state["bpm"] = _walk(_state["bpm"], 90.0, 110.0, 1.5)
-            _state["skin_temp"] = _walk(_state["skin_temp"], 31.0, 34.0, 0.15)
+            _state["skin_temp"] = _walk(_state["skin_temp"], 36.3, 37.0, 0.15)
             _state["resp"] = _walk(_state["resp"], 20.0, 30.0, 0.8)
             bpm = round(_state["bpm"], 1)
             skin_temp = round(_state["skin_temp"], 1)

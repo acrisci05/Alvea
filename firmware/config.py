@@ -49,8 +49,10 @@ ALERT_FAULT_STREAK_THRESHOLD = 5
 # --- VALORI FISIOLOGICI NOMINALI ---
 BPM_SIM_MIN  = 90.0
 BPM_SIM_MAX  = 110.0
-TEMP_SKIN_SIM_MIN = 31.0
-TEMP_SKIN_SIM_MAX = 34.0
+# Temperatura cutanea simulata nel range di normalità (coerente con le soglie
+# cliniche del backend/Node-RED e con la scheda mostrata dall'app: 36.0-37.2°C).
+TEMP_SKIN_SIM_MIN = 36.3
+TEMP_SKIN_SIM_MAX = 37.0
 RESP_RATE_SIM_MIN = 20.0     
 RESP_RATE_SIM_MAX = 30.0
 CONTACT_DROP_PROB = 0.05
