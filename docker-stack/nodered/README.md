@@ -12,9 +12,11 @@
 4. **InfluxDB write** (http request) — `POST /api/v2/write` sul bucket `vitals`.
    Il token arriva dalla variabile d'ambiente `INFLUX_TOKEN` (impostata nel
    `docker-compose.yml`): **nessun nodo aggiuntivo da installare**.
-5. **`alvea/devices/+/alerts`** (MQTT out) — ripubblica gli allarmi generati
-   dalle soglie (oltre a quelli già pubblicati direttamente dal firmware sullo
-   stesso topic).
+5. **`alvea/devices/+/alerts/nodered`** (MQTT out) — ripubblica gli allarmi
+   generati dalle soglie su un topic dedicato, distinto da
+   `alvea/devices/+/alerts` (pubblicato dal firmware e consumato dal backend):
+   così questi alert restano disponibili su MQTT senza essere reingeriti dal
+   backend, che valuta le soglie cliniche in autonomia.
 
 ## Note
 - Cambiando il token Influx, deve essere aggiornato `INFLUX_ADMIN_TOKEN` nel `.env` perché il flow lo
